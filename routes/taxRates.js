@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ Get all tax rates
+
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM tax_rates ORDER BY id DESC");
@@ -14,7 +14,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add new tax rate
+
 router.post("/", async (req, res) => {
   try {
     const { name, rate } = req.body;
@@ -29,7 +29,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Update tax rate
+
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -43,7 +43,6 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ Delete tax rate
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;

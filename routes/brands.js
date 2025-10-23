@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ Get all brands
+
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM brands ORDER BY id DESC");
@@ -14,7 +14,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add a new brand
+
 router.post("/", async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -28,7 +28,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Update brand
+
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -42,7 +42,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ Delete brand
+
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;

@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ Get all inventory logs
+
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add new log (when stock changes)
+
 router.post("/", async (req, res) => {
   try {
     const { product_id, change_type, quantity, note } = req.body;
@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Delete log
+
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;

@@ -4,7 +4,7 @@ import upload from "../config/cloudinary.js";
 
 const router = express.Router();
 
-// ✅ 1. GET all products (with brand + category info)
+
 router.get("/", async (req, res) => {
   let { page, limit, search } = req.query;
   page = parseInt(page) || 1;
@@ -56,7 +56,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ 2. GET single product by ID
+
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -100,7 +100,7 @@ router.get("/:id", async (req, res) => {
 //   }
 // });
 
-// ✅ 3. POST - Create new product (with image upload)
+
 router.post("/", upload.single("image"), async (req, res) => {
   try {
     const { name, description, sku, price, brand_id, category_id, stock } =
@@ -129,7 +129,7 @@ router.post("/", upload.single("image"), async (req, res) => {
   }
 });
 
-// ✅ 4. PUT - Update product
+
 router.put("/:id", upload.single("image"), async (req, res) => {
   try {
     const { name, description, sku, price, brand_id, category_id } = req.body;
@@ -161,7 +161,7 @@ router.put("/:id", upload.single("image"), async (req, res) => {
   }
 });
 
-// ✅ 5. DELETE product
+
 router.delete("/:id", async (req, res) => {
   try {
     const [result] = await pool.query("DELETE FROM products WHERE id = ?", [

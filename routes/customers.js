@@ -207,7 +207,6 @@ router.put("/:id", async (req, res) => {
       notes: notes ?? oldCust.notes,
     };
 
-    // 🔹 3️⃣ Update customer
     await conn.query(
       `UPDATE customers 
        SET name=?, gender=?, birthday=?, debt=?, total_orders=?, status=?, notes=? 
@@ -224,7 +223,6 @@ router.put("/:id", async (req, res) => {
       ]
     );
 
-    // 🔹 4️⃣ Address update or insert
     if (address) {
       const [existingAddr] = await conn.query(
         "SELECT * FROM cus_addr WHERE cus_id=?",
@@ -281,7 +279,6 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    // 🔹 5️⃣ Contact update or insert
     if (contact) {
       const [existingCon] = await conn.query(
         "SELECT * FROM cus_contact WHERE cus_id=?",
@@ -329,7 +326,6 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    // 🔹 6️⃣ Commit transaction
     await conn.commit();
     res.json({ success: true, message: "Customer updated successfully" });
   } catch (err) {

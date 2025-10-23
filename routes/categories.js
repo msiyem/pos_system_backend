@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = express.Router();
 
-// ✅ Get all categories
+
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query("SELECT * FROM categories");
@@ -14,7 +14,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ Add category
+
 router.post("/", async (req, res) => {
   try {
     const { name, parent_id } = req.body;
@@ -28,7 +28,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ Update category
+
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -42,7 +42,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// ✅ Delete category
+
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
