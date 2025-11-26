@@ -4,43 +4,57 @@ import upload from "../config/cloudinary.js";
 
 const router = express.Router();
 
-
 router.get("/", async (req, res) => {
   let { page, limit, search } = req.query;
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 8;
-
   const offset = (page - 1) * limit;
 
   try {
-    let countsql = `SELECT COUNT(*) as total FROM products p`;
-    const params = [];
-    let sql = `
-  SELECT 
-    p.id, p.name, p.description, p.sku, p.price, p.stock, p.image_url,
-    b.name AS brand_name,
-    c.name AS category_name,
-    p.created_at, p.updated_at
-  FROM products p
-  LEFT JOIN brands b ON p.brand_id = b.id
-  LEFT JOIN categories c ON p.category_id = c.id
-`;
+    let params = [];
+    let countParams = [];
 
+    let countsql = `
+      SELECT COUNT(*) AS total
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+    `;
+    let sql = `
+      SELECT 
+        p.id, p.name, p.description, p.sku, p.price, p.stock, p.image_url,
+        b.name AS brand_name,
+        c.name AS category_name,
+        p.created_at, p.updated_at
+      FROM products p
+      LEFT JOIN brands b ON p.brand_id = b.id
+      LEFT JOIN categories c ON p.category_id = c.id
+    `;
+
+    // 🔍 Handle search filters
     if (search) {
-      sql += ` WHERE p.name LIKE ?`;
-      countsql += ` WHERE p.name LIKE ?`;
-      params.push(`%${search}%`);
+      const lowerSearch = search.toLowerCase();
+
+      if (["in stock", "available", "has stock"].includes(lowerSearch)) {
+        sql += " WHERE p.stock > 0";
+        countsql += " WHERE p.stock > 0";
+      } else if (["out of stock", "unavailable", "no stock"].includes(lowerSearch)) {
+        sql += " WHERE p.stock = 0";
+        countsql += " WHERE p.stock = 0";
+      } else {
+        sql += " WHERE p.name LIKE ? OR c.name LIKE ?";
+        countsql += " WHERE p.name LIKE ? OR c.name LIKE ?";
+        params.push(`%${search}%`, `%${search}%`);
+        countParams = [...params];
+      }
     }
 
-    sql += ` ORDER BY p.id DESC LIMIT ? OFFSET ?`;
-    params.push(limit,offset);
+    sql += " ORDER BY p.id DESC LIMIT ? OFFSET ?";
+    params.push(limit, offset);
 
-    const [rows, fields] = await pool.query(sql, params);
-    const [countRows] = await pool.query(
-      countsql,
-      search ? [`%${search}%`] : []
-    );
-    const total = countRows[0].total;
+    const [rows] = await pool.query(sql, params);
+    const [countRows] = await pool.query(countsql, countParams);
+
+    const total = countRows.length > 0 ? countRows[0].total : 0;
 
     res.json({
       success: true,
@@ -51,7 +65,7 @@ router.get("/", async (req, res) => {
       limit,
     });
   } catch (err) {
-    console.log(err);
+    console.error("Error in GET /products:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -85,21 +99,6 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-//
-// router.get("/:id", async (req, res) => {
-//   try {
-//     const [rows] = await pool.query("SELECT * FROM products WHERE id = ?", [
-//       req.params.id,
-//     ]);
-//     if (rows.length === 0)
-//       return res.status(404).json({ error: "Product not found" });
-//     res.json(rows[0]);
-//   } catch (err) {
-//     console.error("Error fetching product:", err);
-//     res.status(500).json({ error: "Failed to fetch product" });
-//   }
-// });
-
 
 router.post("/", upload.single("image"), async (req, res) => {
   try {
@@ -117,18 +116,21 @@ router.post("/", upload.single("image"), async (req, res) => {
       `INSERT INTO products 
         (name, description, sku, price, brand_id, category_id, image_url,stock)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, sku, price, brand_id, category_id, image_url, stock]
+      [name, description, sku, price, brand_id, category_id, image_url, 0]
     );
 
     res
       .status(201)
-      .json({ message: "Product created successfully", id: result.insertId });
+      .json({
+        success: true,
+        message: "Product created successfully",
+        product: { id: result.insertId, name, image_url },
+      });
   } catch (err) {
     console.error("Error creating product:", err);
     res.status(500).json({ error: "Failed to create product" });
   }
 });
-
 
 router.put("/:id", upload.single("image"), async (req, res) => {
   try {
@@ -160,7 +162,6 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: "Failed to update product" });
   }
 });
-
 
 router.delete("/:id", async (req, res) => {
   try {

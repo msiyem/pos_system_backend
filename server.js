@@ -10,6 +10,11 @@ import categoryRoutes from "./routes/categories.js";
 import taxRateRoutes from "./routes/taxRates.js";
 import inventoryRoutes from "./routes/inventoryLog.js";
 
+import suppliers from "./routes/suppliers.js";
+import purchases from "./routes/purchases.js";
+import sales from "./routes/sales.js";
+import expenses from "./routes/expenses.js";
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -25,29 +30,18 @@ app.use(
 
 // users route
 app.use("/users", userRoutes);
-
 // customers route
 app.use("/customers", customerRoutes);
-
-// app.post("/users", async (req, res) => {
-//   try {
-//     const { name, email, password, phone, role } = req.body;
-//     const [result] = await pool.query(
-//       "INSERT INTO users (name, email,password,phone,role) VALUES (?, ?,?,?,?)",
-//       [name, email, password, phone, role]
-//     );
-//     res.json({ id: result.insertId, name, email, password, phone, role });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).send("database error");
-//   }
-// });
-
 app.use("/products", productRoutes);
 app.use("/brands", brandRoutes);
 app.use("/categories", categoryRoutes);
 app.use("/tax-rates", taxRateRoutes);
 app.use("/inventory", inventoryRoutes);
+app.use("/suppliers", suppliers);
+app.use("/purchases", purchases);
+app.use("/sales", sales);
+app.use("/expenses", expenses);
+
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

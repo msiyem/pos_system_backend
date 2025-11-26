@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM categories");
+    const [rows] = await pool.query("SELECT * FROM categories ");
     res.json(rows);
   } catch (err) {
     console.error("Error fetching categories:", err);
@@ -17,10 +17,12 @@ router.get("/", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { name, parent_id } = req.body;
-    if (!name) return res.status(400).json({ error: "Category name is required" });
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
 
-    await pool.query("INSERT INTO categories (name, parent_id) VALUES (?, ?)", [name, parent_id]);
+    await pool.query("INSERT INTO categories (name) VALUES (?)", [name]);
     res.json({ message: "Category added successfully" });
   } catch (err) {
     console.error("Error adding category:", err);
@@ -32,9 +34,9 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, parent_id } = req.body;
+    const { name } = req.body;
 
-    await pool.query("UPDATE categories SET name=?, parent_id=? WHERE id=?", [name, parent_id, id]);
+    await pool.query("UPDATE categories SET name=? WHERE id=?", [name, id]);
     res.json({ message: "Category updated successfully" });
   } catch (err) {
     console.error("Error updating category:", err);
