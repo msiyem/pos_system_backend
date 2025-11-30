@@ -6,17 +6,65 @@ const router = express.Router();
 // Add Supplier
 router.post("/", async (req, res) => {
   try {
-    const { name, phone, email, address } = req.body;
+    const {
+      name,
+      gender,
+      birthday,
+      phone,
+      alt_phone,
+      whatsapp,
+      email,
+      division,
+      district,
+      city,
+      area,
+      post_code,
+      sector,
+      road,
+      house,
+    } = req.body;
     const [rows] = await pool.query(
-      "INSERT INTO suppliers (name, phone, email, address) VALUES (?,?,?,?)",
-      [name, phone, email, address]
+      `INSERT INTO suppliers (
+      name,
+      gender,
+      birthday,
+      phone,
+      alt_phone,
+      whatsapp,
+      email,
+      division,
+      district,
+      city,
+      area,
+      post_code,
+      sector,
+      road,
+      house
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        name,
+        gender,
+        birthday,
+        phone,
+        alt_phone,
+        whatsapp,
+        email,
+        division,
+        district,
+        city,
+        area,
+        post_code,
+        sector,
+        road,
+        house,
+      ]
     );
     const supplierId = rows.insertId;
     res.status(201).json({
       success: true,
       message: `Supplier added Successfull! ID = ${supplierId}`,
-      supplierId
-    })
+      supplierId,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed!" });
@@ -34,7 +82,9 @@ router.get("/", async (req, res) => {
     let sql = `
       SELECT
         s.*,
-        DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS created_at
+        DATE_FORMAT(s.birthday, '%d-%m-%Y') AS birthday,
+        DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS created_at,
+        DATE_FORMAT(CONVERT_TZ(s.last_transition,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_transition
       FROM suppliers s
     `;
 
@@ -72,6 +122,36 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/:id/details", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+        s.*,
+        DATE_FORMAT(s.birthday, '%d-%m-%Y') AS birthday,
+        DATE_FORMAT(CONVERT_TZ(s.created_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS created_at,
+        DATE_FORMAT(CONVERT_TZ(s.last_transition,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_transition
+      FROM suppliers s
+    WHERE s.id = ?
+    `,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Supplier not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Fetched Successfully",
+      data: rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // Delete supplier
 router.delete("/:id", async (req, res) => {

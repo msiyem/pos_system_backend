@@ -4,7 +4,7 @@ const router = express.Router();
 
 // Add Purchase & Items
 router.post("/", async (req, res) => {
-  const { supplier_id, items } = req.body;
+  const { supplier_id, items,total_amount } = req.body;
   const conn = await pool.getConnection();
 
   try {
@@ -12,11 +12,11 @@ router.post("/", async (req, res) => {
 
     // purchase row
     const [p] = await conn.query(
-      "INSERT INTO purchases (supplier_id, total_amount) VALUES (?,?,?)",
-      [supplier_id, 0]
+      "INSERT INTO purchases (supplier_id, total_amount) VALUES (?,?)",
+      [supplier_id, total_amount || 0]
     );
     const purchase_id = p.insertId;
-    const invoice_no = purchase_id;
+    const invoice_no = `INV-P${purchase_id}`;
 
 
     await conn.query(
@@ -27,7 +27,7 @@ router.post("/", async (req, res) => {
     let total = 0;
 
     for (let item of items) {
-      const { product_id, quantity, price } = item;
+      const { product_id, quantity, price,name,sku,image_url } = item;
       const subtotal = quantity * price;
       total += subtotal;
 
@@ -42,6 +42,13 @@ router.post("/", async (req, res) => {
         "UPDATE products SET stock = stock + ? WHERE id = ?",
         [quantity, product_id]
       );
+
+      await conn.query(
+        `UPDATE suppliers
+        SET last_transition = NOW()
+        WHERE id = ?;`,[supplier_id]
+
+      )
 
       // inventory log
       await conn.query(

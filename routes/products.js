@@ -4,22 +4,41 @@ import upload from "../config/cloudinary.js";
 
 const router = express.Router();
 
+/* -----------------------------
+   GET /products  (List + Search)
+------------------------------ */
 router.get("/", async (req, res) => {
-  let { page, limit, search } = req.query;
-  page = parseInt(page) || 1;
-  limit = parseInt(limit) || 8;
-  const offset = (page - 1) * limit;
-
   try {
+    let { page = 1, limit = 8, search = "" } = req.query;
+
+    page = parseInt(page);
+    limit = parseInt(limit);
+    const offset = (page - 1) * limit;
+
+    let conditions = [];
     let params = [];
     let countParams = [];
 
-    let countsql = `
-      SELECT COUNT(*) AS total
-      FROM products p
-      LEFT JOIN categories c ON p.category_id = c.id
-    `;
-    let sql = `
+    // Search Handling
+    if (search.trim()) {
+      const s = search.trim().toLowerCase();
+
+      if (["in stock", "available", "has stock"].includes(s)) {
+        conditions.push("p.stock > 0");
+      } else if (["out of stock", "no stock", "unavailable"].includes(s)) {
+        conditions.push("p.stock = 0");
+      } else {
+        conditions.push(
+          `(p.name LIKE ? OR p.sku LIKE ? OR c.name LIKE ? OR b.name LIKE ?)`
+        );
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      }
+    }
+
+    let where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
+    // Main Query
+    const sql = `
       SELECT 
         p.id, p.name, p.description, p.sku, p.price, p.stock, p.image_url,
         b.name AS brand_name,
@@ -28,41 +47,41 @@ router.get("/", async (req, res) => {
       FROM products p
       LEFT JOIN brands b ON p.brand_id = b.id
       LEFT JOIN categories c ON p.category_id = c.id
+      ${where}
+      ORDER BY p.id DESC
+      LIMIT ? OFFSET ?
     `;
 
-    // 🔍 Handle search filters
-    if (search) {
-      const lowerSearch = search.toLowerCase();
+    // Count Query
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN brands b ON p.brand_id = b.id
+      ${where}
+    `;
 
-      if (["in stock", "available", "has stock"].includes(lowerSearch)) {
-        sql += " WHERE p.stock > 0";
-        countsql += " WHERE p.stock > 0";
-      } else if (["out of stock", "unavailable", "no stock"].includes(lowerSearch)) {
-        sql += " WHERE p.stock = 0";
-        countsql += " WHERE p.stock = 0";
-      } else {
-        sql += " WHERE p.name LIKE ? OR c.name LIKE ?";
-        countsql += " WHERE p.name LIKE ? OR c.name LIKE ?";
-        params.push(`%${search}%`, `%${search}%`);
-        countParams = [...params];
-      }
-    }
+    // Count Params should not include LIMIT/OFFSET
+    countParams = [...params];
 
-    sql += " ORDER BY p.id DESC LIMIT ? OFFSET ?";
+    // Add LIMIT & OFFSET to main params
     params.push(limit, offset);
 
     const [rows] = await pool.query(sql, params);
-    const [countRows] = await pool.query(countsql, countParams);
+    const [countRows] = await pool.query(countSql, countParams);
 
-    const total = countRows.length > 0 ? countRows[0].total : 0;
+    const total = countRows[0]?.total || 0;
 
     res.json({
       success: true,
       message: "Fetched successfully",
       data: rows,
-      total,
-      page,
-      limit,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (err) {
     console.error("Error in GET /products:", err);
@@ -70,14 +89,15 @@ router.get("/", async (req, res) => {
   }
 });
 
-
+/* -----------------------------
+   GET /products/:id  (Single Product)
+------------------------------ */
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
   try {
     const [rows] = await pool.query(
       `
       SELECT 
-        p.id, p.name, p.description, p.sku, p.price,p.stock, p.image_url,
+        p.id, p.name, p.description, p.sku, p.price, p.stock, p.image_url,
         b.name AS brand_name,
         c.name AS category_name,
         p.created_at, p.updated_at
@@ -85,62 +105,77 @@ router.get("/:id", async (req, res) => {
       LEFT JOIN brands b ON p.brand_id = b.id
       LEFT JOIN categories c ON p.category_id = c.id
       WHERE p.id = ?
-
     `,
-      [id]
+      [req.params.id]
     );
-    if (rows.length == 0) {
-      return res.status(404).json({ message: "Customer not found" });
-    }
+
+    if (!rows.length)
+      return res.status(404).json({ error: "Product not found" });
+
     res.json(rows[0]);
   } catch (err) {
-    console.log(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-
+/* -----------------------------
+   POST /products  (Create Product)
+------------------------------ */
 router.post("/", upload.single("image"), async (req, res) => {
   try {
-    const { name, description, sku, price, brand_id, category_id, stock } =
-      req.body;
+    const {
+      name,
+      description,
+      sku,
+      brand_id,
+      category_id,
+      stock = 0,
+    } = req.body;
     const image_url = req.file ? req.file.path : null;
+    const price = parseFloat(req.body.price);
 
-    if (!name || !sku || !price) {
+    // Basic Validation
+    if (!name || !sku || isNaN(price)) {
       return res
         .status(400)
-        .json({ error: "Name, SKU, and Price are required" });
+        .json({ error: "Name, SKU, and valid Price required" });
     }
 
     const [result] = await pool.query(
       `INSERT INTO products 
-        (name, description, sku, price, brand_id, category_id, image_url,stock)
+      (name, description, sku, price, brand_id, category_id, image_url, stock)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, description, sku, price, brand_id, category_id, image_url, 0]
+      [name, description, sku, price, brand_id, category_id, image_url, stock]
     );
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Product created successfully",
-        product: { id: result.insertId, name, image_url },
-      });
+    res.status(201).json({
+      success: true,
+      message: "Product created successfully",
+      product: {
+        id: result.insertId,
+        name,
+        image_url,
+      },
+    });
   } catch (err) {
-    console.error("Error creating product:", err);
     res.status(500).json({ error: "Failed to create product" });
   }
 });
 
+/* -----------------------------
+   PUT /products/:id  (Update Product)
+------------------------------ */
 router.put("/:id", upload.single("image"), async (req, res) => {
   try {
     const { name, description, sku, price, brand_id, category_id } = req.body;
     const image_url = req.file ? req.file.path : req.body.image_url;
 
     const [result] = await pool.query(
-      `UPDATE products 
-       SET name=?, description=?, sku=?, price=?, brand_id=?, category_id=?, image_url=?, updated_at=CURRENT_TIMESTAMP
-       WHERE id=?`,
+      `
+      UPDATE products 
+      SET name=?, description=?, sku=?, price=?, brand_id=?, category_id=?, image_url=?, updated_at=CURRENT_TIMESTAMP
+      WHERE id=?
+      `,
       [
         name,
         description,
@@ -153,26 +188,29 @@ router.put("/:id", upload.single("image"), async (req, res) => {
       ]
     );
 
-    if (result.affectedRows === 0)
+    if (!result.affectedRows)
       return res.status(404).json({ error: "Product not found" });
 
     res.json({ message: "Product updated successfully" });
   } catch (err) {
-    console.error("Error updating product:", err);
     res.status(500).json({ error: "Failed to update product" });
   }
 });
 
+/* -----------------------------
+   DELETE /products/:id
+------------------------------ */
 router.delete("/:id", async (req, res) => {
   try {
     const [result] = await pool.query("DELETE FROM products WHERE id = ?", [
       req.params.id,
     ]);
-    if (result.affectedRows === 0)
+
+    if (!result.affectedRows)
       return res.status(404).json({ error: "Product not found" });
+
     res.json({ message: "Product deleted successfully" });
   } catch (err) {
-    console.error("Error deleting product:", err);
     res.status(500).json({ error: "Failed to delete product" });
   }
 });

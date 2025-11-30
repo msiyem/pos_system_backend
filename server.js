@@ -38,7 +38,7 @@ app.use("/categories", categoryRoutes);
 app.use("/tax-rates", taxRateRoutes);
 app.use("/inventory", inventoryRoutes);
 app.use("/suppliers", suppliers);
-app.use("/purchases", purchases);
+app.use("/purchase", purchases);
 app.use("/sales", sales);
 app.use("/expenses", expenses);
 
