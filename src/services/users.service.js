@@ -10,3 +10,15 @@ export async function getAllUsersService() {
   `);
   return rows;
 }
+export async function getUserDetails(id) {
+  const [rows] = await pool.query(`
+    SELECT 
+      u.*,
+      DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '+00:00'), '%Y-%m-%d %r') AS created_at,
+      DATE_FORMAT(CONVERT_TZ(updated_at, '+00:00', '+00:00'), '%Y-%m-%d %r') AS updated_at
+    FROM users u
+    WHERE u.id=?
+  `,[id]);
+  return rows;
+  
+}

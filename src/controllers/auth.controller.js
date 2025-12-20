@@ -10,7 +10,7 @@ export async function login(req, res) {
 
   const { accessToken, refreshToken } = await loginUser(user, password);
 
-  // 🔐 Refresh token → HttpOnly cookie
+  //  Refresh token → HttpOnly cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
@@ -20,7 +20,7 @@ export async function login(req, res) {
     path: "/",
   });
 
-  // ✅ Access token → RESPONSE BODY
+  //  Access token → RESPONSE BODY
   res.json({
     accessToken,
     user: {
