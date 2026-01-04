@@ -9,17 +9,27 @@ cloudinary.config({
   cloud_name: process.env.CLOUD_NAME,
   api_key: process.env.CLOUD_KEY,
   api_secret: process.env.CLOUD_SECRET,
-  secure:true
+  secure: true,
 });
 
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: "pos_system_products", // Cloudinary folder
-    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+  params: (req, file) => {
+    const base = req.originalUrl.split("/")[2];
+    
+
+    return {
+      folder: `pos_system_${base}`,
+      allowed_formats: ["jpg", "png", "jpeg", "webp"],
+      transformation: [{ quality: "auto", fetch_format: "auto" }],
+    };
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
+export { cloudinary };
 export default upload;

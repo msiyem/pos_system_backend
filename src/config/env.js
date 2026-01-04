@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
 
-
 dotenv.config();
 
 const requiredEnvs = [
@@ -9,7 +8,8 @@ const requiredEnvs = [
   "DB_USER",
   "DB_PASSWORD",
   "DB_NAME",
-  "JWT_SECRET",
+  "JWT_ACCESS_SECRET",
+  "JWT_REFRESH_SECRET"
 ];
 
 requiredEnvs.forEach((key) => {
@@ -19,7 +19,7 @@ requiredEnvs.forEach((key) => {
 });
 
 export const env = {
-  port: process.env.PORT,
+  port: Number(process.env.PORT),
   nodeEnv: process.env.NODE_ENV || "development",
 
   db: {
@@ -30,14 +30,20 @@ export const env = {
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET,
-    expiresIn: process.env.JWT_EXPIRES_IN || "15m",
-    refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "7d",
+    accessSecret: process.env.JWT_ACCESS_SECRET,
+    refreshSecret: process.env.JWT_REFRESH_SECRET,
+    expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+    refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || "1d",
+  },
+  cloudinary: {
+    name: process.env.CLOUD_NAME,
+    key: process.env.CLOUD_KEY,
+    secret: process.env.CLOUD_SECRET,
   },
 
   cookie: {
-    secure: process.env.COOKIE_SECURE === "true",
-    sameSite: process.env.COOKIE_SAME_SITE || "strict",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
   },
 
   logLevel: process.env.LOG_LEVEL || "info",

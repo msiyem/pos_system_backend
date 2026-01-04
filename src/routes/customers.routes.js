@@ -1,4 +1,5 @@
 import express from "express";
+import upload from "../config/cloudinary.js";
 import {
   getCustomers,
   getCustomerDetails,
@@ -16,8 +17,23 @@ router.get(
   authorize("admin", "staff"),
   getCustomerDetails
 );
-router.post("/customers/", authorize("admin", "staff"), addCustomer);
-router.put("/customers/:id", authorize("admin", "staff"), updateCustomer);
+router.post(
+  "/customers/",
+  authorize("admin", "staff"),
+  upload.single("image"),
+  addCustomer
+);
+router.put(
+  "/customers/:id",
+  authorize("admin", "staff"),
+  upload.single("image"),
+  // (req, res, next) => {
+  //   console.log("AFTER MULTER BODY:", req.body);
+  //   console.log("AFTER MULTER FILE:", req.file);
+  //   next();
+  // },
+  updateCustomer
+);
 router.delete("/customers/:id", authorize("admin", "staff"), deleteCustomer);
 
 export default router;

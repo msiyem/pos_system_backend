@@ -8,7 +8,8 @@ export async function getBrandsService() {
 
 // Add brand
 export async function addBrandService(name, description) {
-  await pool.query("INSERT INTO brands (name, description) VALUES (?, ?)", [name, description]);
+  const [res]=await pool.query("INSERT INTO brands (name, description) VALUES (?, ?)", [name, description]);
+  return res.insertId;
 }
 
 // Update brand

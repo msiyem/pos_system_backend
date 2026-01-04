@@ -1,3 +1,4 @@
+import { cloudinary } from "../config/cloudinary.js";
 import pool from "../config/db.js";
 
 // Get all customers (pagination + search)
@@ -6,19 +7,13 @@ export async function getCustomersService(query) {
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 9;
   const offset = (page - 1) * limit;
-
   let sql = `
     SELECT 
       c.*,
       DATE_FORMAT(c.birthday, '%d-%m-%Y') AS birthday,
       DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased,
-      a.*,
-      DATE_FORMAT(CONVERT_TZ(a.created_at,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS created_at,
-      con.*
+      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
     FROM customers c
-    LEFT JOIN cus_addr a ON c.id=a.cus_id
-    LEFT JOIN cus_contact con ON c.id=con.cus_id
   `;
 
   let countsql = `SELECT COUNT(*) as total FROM customers c`;
@@ -50,15 +45,10 @@ export async function getCustomerDetailsService(id) {
     `
     SELECT 
       c.*,
-      DATE_FORMAT(c.birthday, '%d-%m-%Y') AS birthday,
+      DATE_FORMAT(c.birthday, '%Y-%m-%d') AS birthday,
       DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased,
-      a.*,
-      DATE_FORMAT(CONVERT_TZ(a.created_at,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS created_at,
-      con.*
+      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
     FROM customers c
-    LEFT JOIN cus_addr a ON c.id=a.cus_id
-    LEFT JOIN cus_contact con ON c.id=con.cus_id
     WHERE c.id = ?
     `,
     [id]
@@ -67,72 +57,75 @@ export async function getCustomerDetailsService(id) {
 }
 
 // Add new customer
-export async function addCustomerService(data) {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const {
+export async function addCustomerService(data, image_url, image_public_id) {
+  const {
+    name,
+    gender,
+    birthday,
+    debt,
+    total_orders,
+    status,
+    notes,
+    division,
+    district,
+    city,
+    area,
+    post_code,
+    sector,
+    road,
+    house,
+    phone,
+    alt_phone,
+    whatsapp,
+    email,
+    verify,
+  } = data;
+
+  const [rows] = await pool.query(
+    `INSERT INTO customers (
+      name, gender, birthday, debt, total_orders, status, notes,
+      division, district, city, area, post_code, sector, road, house,
+      phone, alt_phone, whatsapp, email, verify, image_url, image_public_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)`,
+    [
       name,
-      gender,
-      birthday,
-      debt,
-      total_orders,
-      status,
-      notes,
-      address,
-      contact,
-    } = data;
+      gender || "male",
+      birthday || null,
+      debt || 0,
+      total_orders || 0,
+      status || "active",
+      notes || null,
+      division,
+      district,
+      city,
+      area,
+      post_code,
+      sector,
+      road,
+      house,
+      phone,
+      alt_phone,
+      whatsapp,
+      email,
+      verify || 0,
+      image_url,
+      image_public_id,
+    ]
+  );
 
-    const [customerResult] = await conn.query(
-      `INSERT INTO customers (name, gender, birthday, debt, total_orders, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        name,
-        gender || "male",
-        birthday || null,
-        debt || 0,
-        total_orders || 0,
-        status || "active",
-        notes || null,
-      ]
-    );
-    const customerId = customerResult.insertId;
-
-    if (address) {
-      const { division, district, city, area, post_code, sector, road, house } =
-        address;
-      await conn.query(
-        `INSERT INTO cus_addr (cus_id, division, district, city, area, post_code, sector, road, house)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [customerId, division, district, city, area, post_code, sector, road, house]
-      );
-    }
-
-    if (contact) {
-      const { phone, alt_phone, whatsapp, email, verify } = contact;
-      await conn.query(
-        `INSERT INTO cus_contact (cus_id, phone, alt_phone, whatsapp, email, verify)
-        VALUES (?, ?, ?, ?, ?, ?)`,
-        [customerId, phone, alt_phone, whatsapp, email, verify || 0]
-      );
-    }
-
-    await conn.commit();
-    return customerId;
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
-  }
+  return rows.insertId;
 }
 
 // Update customer
-export async function updateCustomerService(id, data) {
+export async function updateCustomerService(
+  id,
+  data,
+  image_url,
+  image_public_id
+) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-
     const [existingCustomer] = await conn.query(
       "SELECT * FROM customers WHERE id=?",
       [id]
@@ -142,6 +135,14 @@ export async function updateCustomerService(id, data) {
       throw new Error("Customer not found");
     }
     const oldCust = existingCustomer[0];
+    const removeImage = data.removeImage === "true";
+
+    if (
+      (image_public_id && oldCust.image_public_id) ||
+      (removeImage && oldCust.image_public_id)
+    ) {
+      await cloudinary.uploader.destroy(oldCust.image_public_id);
+    }
 
     const {
       name,
@@ -151,8 +152,19 @@ export async function updateCustomerService(id, data) {
       total_orders,
       status,
       notes,
-      address,
-      contact,
+      division,
+      district,
+      city,
+      area,
+      post_code,
+      sector,
+      road,
+      house,
+      phone,
+      alt_phone,
+      whatsapp,
+      email,
+      verify,
     } = data;
 
     const updatedCustomer = {
@@ -163,12 +175,37 @@ export async function updateCustomerService(id, data) {
       total_orders: total_orders ?? oldCust.total_orders,
       status: status ?? oldCust.status,
       notes: notes ?? oldCust.notes,
+      division: division ?? oldCust.division ?? null,
+      district: district ?? oldCust.district ?? null,
+      city: city ?? oldCust.city ?? null,
+      area: area ?? oldCust.area ?? null,
+      post_code: post_code ?? oldCust.post_code ?? null,
+      sector: sector ?? oldCust.sector ?? null,
+      road: road ?? oldCust.road ?? null,
+      house: house ?? oldCust.house ?? null,
+      phone: phone ?? oldCust.phone ?? null,
+      alt_phone: alt_phone ?? oldCust.alt_phone ?? null,
+      whatsapp: whatsapp ?? oldCust.whatsapp ?? null,
+      email: email ?? oldCust.email ?? null,
+      verify:
+        verify !== undefined && verify !== null && verify !== ""
+          ? Number(verify)
+          : Number(oldCust.verify ?? 0),
+
+      image_url: removeImage ? null : image_url ?? oldCust.image_url,
+
+      image_public_id: removeImage
+        ? null
+        : image_public_id ?? oldCust.image_public_id,
     };
 
     await conn.query(
       `UPDATE customers 
-       SET name=?, gender=?, birthday=?, debt=?, total_orders=?, status=?, notes=? 
-       WHERE id=?`,
+      SET name=?, 
+      gender=?, birthday=?, debt=?, total_orders=?, status=?, notes=?, 
+      division=?, district=?, city=?, area=?, post_code=?, sector=?, road=?, house=?,
+      phone=?, alt_phone=?, whatsapp=?, email=?, verify=?,image_url=?,image_public_id=?
+      WHERE id=?`,
       [
         updatedCustomer.name,
         updatedCustomer.gender,
@@ -177,91 +214,24 @@ export async function updateCustomerService(id, data) {
         updatedCustomer.total_orders,
         updatedCustomer.status,
         updatedCustomer.notes,
+        updatedCustomer.division,
+        updatedCustomer.district,
+        updatedCustomer.city,
+        updatedCustomer.area,
+        updatedCustomer.post_code,
+        updatedCustomer.sector,
+        updatedCustomer.road,
+        updatedCustomer.house,
+        updatedCustomer.phone,
+        updatedCustomer.alt_phone,
+        updatedCustomer.whatsapp,
+        updatedCustomer.email,
+        updatedCustomer.verify,
+        updatedCustomer.image_url,
+        updatedCustomer.image_public_id,
         id,
       ]
     );
-
-    if (address) {
-      const [existingAddr] = await conn.query("SELECT * FROM cus_addr WHERE cus_id=?", [id]);
-      const oldAddr = existingAddr[0] || {};
-
-      const updatedAddr = {
-        division: address.division ?? oldAddr.division ?? null,
-        district: address.district ?? oldAddr.district ?? null,
-        city: address.city ?? oldAddr.city ?? null,
-        area: address.area ?? oldAddr.area ?? null,
-        post_code: address.post_code ?? oldAddr.post_code ?? null,
-        sector: address.sector ?? oldAddr.sector ?? null,
-        road: address.road ?? oldAddr.road ?? null,
-        house: address.house ?? oldAddr.house ?? null,
-      };
-
-      if (existingAddr.length) {
-        await conn.query(
-          `UPDATE cus_addr SET division=?, district=?, city=?, area=?, post_code=?, sector=?, road=?, house=? WHERE cus_id=?`,
-          [
-            updatedAddr.division,
-            updatedAddr.district,
-            updatedAddr.city,
-            updatedAddr.area,
-            updatedAddr.post_code,
-            updatedAddr.sector,
-            updatedAddr.road,
-            updatedAddr.house,
-            id,
-          ]
-        );
-      } else {
-        await conn.query(
-          `INSERT INTO cus_addr (cus_id, division, district, city, area, post_code, sector, road, house)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            updatedAddr.division,
-            updatedAddr.district,
-            updatedAddr.city,
-            updatedAddr.area,
-            updatedAddr.post_code,
-            updatedAddr.sector,
-            updatedAddr.road,
-            updatedAddr.house,
-          ]
-        );
-      }
-    }
-
-    if (contact) {
-      const [existingCon] = await conn.query("SELECT * FROM cus_contact WHERE cus_id=?", [id]);
-      const oldCon = existingCon[0] || {};
-
-      const updatedCon = {
-        phone: contact.phone ?? oldCon.phone ?? null,
-        alt_phone: contact.alt_phone ?? oldCon.alt_phone ?? null,
-        whatsapp: contact.whatsapp ?? oldCon.whatsapp ?? null,
-        email: contact.email ?? oldCon.email ?? null,
-        verify: Number(contact.verify ?? oldCon.verify ?? 0),
-      };
-
-      if (existingCon.length) {
-        await conn.query(
-          `UPDATE cus_contact SET phone=?, alt_phone=?, whatsapp=?, email=?, verify=? WHERE cus_id=?`,
-          [
-            updatedCon.phone,
-            updatedCon.alt_phone,
-            updatedCon.whatsapp,
-            updatedCon.email,
-            updatedCon.verify,
-            id,
-          ]
-        );
-      } else {
-        await conn.query(
-          `INSERT INTO cus_contact (cus_id, phone, alt_phone, whatsapp, email, verify)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [id, updatedCon.phone, updatedCon.alt_phone, updatedCon.whatsapp, updatedCon.email, updatedCon.verify]
-        );
-      }
-    }
 
     await conn.commit();
   } catch (err) {

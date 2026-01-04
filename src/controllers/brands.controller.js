@@ -22,8 +22,8 @@ export async function addBrand(req, res) {
     const { name, description } = req.body;
     if (!name) return res.status(400).json({ error: "Brand name is required" });
 
-    await addBrandService(name, description);
-    res.json({ message: "Brand added successfully" });
+    const id = await addBrandService(name, description);
+    res.json({ message: `Brand added successfully,Id=${id}`});
   } catch (err) {
     console.error("Error adding brand:", err);
     res.status(500).json({ error: "Failed to add brand" });

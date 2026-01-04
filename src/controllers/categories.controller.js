@@ -19,11 +19,11 @@ export async function getCategories(req, res) {
 // Add category
 export async function addCategory(req, res) {
   try {
-    const { name } = req.body;
+    const { name,is_active} = req.body;
     if (!name) return res.status(400).json({ error: "Category name is required" });
 
-    await addCategoryService(name);
-    res.json({ message: "Category added successfully" });
+    const id=await addCategoryService(name,is_active);
+    res.json({ message: `Category added successfully,Id=${id}` });
   } catch (err) {
     console.error("Error adding category:", err);
     res.status(500).json({ error: "Failed to add category" });

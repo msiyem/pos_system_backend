@@ -8,15 +8,9 @@ export async function loginUser(user, password) {
   const match = await bcrypt.compare(password, user.password);
   if (!match) throw new Error("Invalid credentials");
 
-  const accessToken = signAccessToken({
-    id: user.id,
-    role: user.role,
-  });
+  const accessToken = signAccessToken(user);
 
-  const refreshToken = signRefreshToken({
-    id: user.id,
-    role: user.role,
-  });
+  const refreshToken = signRefreshToken(user);
 
   return { accessToken, refreshToken };
 }

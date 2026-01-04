@@ -4,35 +4,30 @@ import {
   getSuppliers,
   getSupplierDetails,
   deleteSupplier,
+  updateSupplier,
 } from "../controllers/suppliers.controller.js";
-// import { authenticate, authorize } from "../middlewares/auth.js";
+import {authorize} from "../middleware/authorize.js";
+import upload from "../config/cloudinary.js";
 
 const router = express.Router();
 
 router.post(
   "/suppliers",
-  // authenticate,
-  // authorize("admin"),
+  authorize("admin"),
+  upload.single("image"),
   addSupplier
 );
 
-router.get(
-  "/suppliers",
-  // authenticate,
-  getSuppliers
-);
+router.get("/suppliers", authorize("admin"), getSuppliers);
 
-router.get(
-  "/suppliers/:id/details",
-  // authenticate,
-  getSupplierDetails
-);
-
-router.delete(
+router.get("/suppliers/:id/details", getSupplierDetails);
+router.put(
   "/suppliers/:id",
-  // authenticate,
-  // authorize("admin"),
-  deleteSupplier
+  authorize("admin"),
+  upload.single("image"),
+  updateSupplier
 );
+
+router.delete("/suppliers/:id", authorize("admin"), deleteSupplier);
 
 export default router;

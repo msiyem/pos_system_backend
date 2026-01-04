@@ -1,6 +1,8 @@
 import { loginUser } from "../services/auth.service.js";
 import { findUserByEmail } from "../services/user.service.js";
 import { verifyRefreshToken, signAccessToken } from "../utils/jwt.js";
+import { getUserDetails } from "../services/users.service.js";
+import { env } from "../config/env.js";
 
 export async function login(req, res) {
   const { email, password } = req.body;
@@ -13,10 +15,10 @@ export async function login(req, res) {
   //  Refresh token → HttpOnly cookie
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    secure: process.env.NODE_ENV === "production" || false,
+    maxAge: 24 * 60 * 60 * 1000,
+    secure: env.cookie.secure,
     // sameSite: "Strict",
-    sameSite: "lax",
+    sameSite: env.cookie.sameSite,
     path: "/",
   });
 
@@ -31,30 +33,39 @@ export async function login(req, res) {
   });
 }
 
-export function refresh(req, res) {
+export async function refresh(req, res) {
   console.log("Cookies in refresh:", req.cookies);
-  const token = req.cookies.refreshToken;
+  const token = req.cookies?.refreshToken;
 
-  if (!token) return res.status(401).json({ message: "No refresh token" });
+  if (!token) {
+    return res.status(401).json({ message: "No refresh token" });
+  }
 
-  try {
+
     const decoded = verifyRefreshToken(token);
+    if (!decoded) {
+    return res.status(401).json({ message: "Invalid or expired refresh token" });
+  }
 
-    const newAccessToken = signAccessToken({
-      id: decoded.id,
-      role: decoded.role,
-    });
+    const users = await getUserDetails(decoded.id);
+    const user=users[0];
+    if(!user){
+      return res.status(401).json({message: "User not found!"});
+    }
+
+    const newAccessToken = signAccessToken(user);
 
     res.json({
       accessToken: newAccessToken,
       user: {
-        id: decoded.id,
-        role: decoded.role,
+        id: user.id,
+        role: user.role,
+        name: user.name,
       },
     });
-  } catch {
-    res.status(401).json({ message: "Invalid refresh token" });
-  }
+  
+    
+  
 }
 
 export function logout(req, res) {

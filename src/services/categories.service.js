@@ -7,8 +7,9 @@ export async function getCategoriesService() {
 }
 
 // Add category
-export async function addCategoryService(name) {
-  await pool.query("INSERT INTO categories (name) VALUES (?)", [name]);
+export async function addCategoryService(name,is_active=1) {
+  const [res]=await pool.query("INSERT INTO categories (name,is_active) VALUES (?,?)", [name,is_active]);
+  return res.insertId;
 }
 
 // Update category
