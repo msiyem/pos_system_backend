@@ -4,6 +4,9 @@ import {
   addCustomerService,
   updateCustomerService,
   deleteCustomerService,
+  getCustomerTransactionHistoryService,
+  getCustomerTransactionCount,
+  getCustomerSalesItemsService,
 } from "../services/customers.service.js";
 
 // Get all customers
@@ -30,6 +33,86 @@ export async function getCustomerDetails(req, res) {
   }
 }
 
+//Get customer transaction history
+export async function getCustomerTransaction(req, res) {
+  const { id } = req.params;
+  const { fromDate, toDate, type, page = 1, limit = 10 } = req.query;
+
+  try {
+    if (!id) {
+      return res.status(400).json({ message: "Customer ID is required" });
+    }
+
+    const data = await getCustomerTransactionHistoryService({
+      customerId: Number(id),
+      fromDate,
+      toDate,
+      type: type && type !== "All" ? type : undefined,
+      page: Number(page),
+      limit: Number(limit),
+    });
+
+    const summary = await getCustomerTransactionCount({
+      customerId: Number(id),
+      fromDate,
+      toDate,
+      type: type && type !== "All" ? type : undefined,
+    });
+    const total = Number(summary?.total_transactions || 0);
+    return res.status(200).json({
+      success: true,
+      data,
+      total_transactions: summary?.total_transactions || 0,
+      purchased_count: summary?.purchased_count || 0,
+      payment_count: summary?.payment_count || 0,
+      duepayment_count: summary?.duepayment_count || 0,
+      refund_count: summary?.refund_count || 0,
+      pagination: {
+        totalPage: Math.ceil(total / Number(limit)),
+        page: Number(page),
+        limit: Number(limit),
+        total,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+      error: "Failed to fetch transactions",
+    });
+  }
+}
+
+export async function getCustomerSalesItemsController(req, res) {
+  const { customerId, saleId } = req.params;
+  const userId = req.user.id;
+  try {
+    if (!saleId || !customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "saleId and customerId are required",
+      });
+    }
+
+    const items = await getCustomerSalesItemsService(
+      saleId,
+      customerId,
+      userId
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: items,
+    });
+  } catch (error) {
+    console.error("getCustomerSalesItemsController error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch sale items",
+    });
+  }
+}
+
 // Add new customer
 export async function addCustomer(req, res) {
   try {
@@ -44,12 +127,10 @@ export async function addCustomer(req, res) {
       image_url,
       image_public_id
     );
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: `Customer added successsfully!,Id=${customerId}`,
-      });
+    res.status(201).json({
+      success: true,
+      message: `Customer added successsfully!,Id=${customerId}`,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message, message: err.message });
@@ -66,7 +147,7 @@ export async function updateCustomer(req, res) {
     image_public_id = req.file.filename;
   }
 
-  if(req.body.removeImage === 'true'){
+  if (req.body.removeImage === "true") {
     image_url = null;
     image_public_id = null;
   }

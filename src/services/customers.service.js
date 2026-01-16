@@ -12,7 +12,7 @@ export async function getCustomersService(query) {
       c.*,
       DATE_FORMAT(c.birthday, '%d-%m-%Y') AS birthday,
       DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
+      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
     FROM customers c
   `;
 
@@ -47,7 +47,7 @@ export async function getCustomerDetailsService(id) {
       c.*,
       DATE_FORMAT(c.birthday, '%Y-%m-%d') AS birthday,
       DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+06:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
+      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
     FROM customers c
     WHERE c.id = ?
     `,
@@ -241,6 +241,217 @@ export async function updateCustomerService(
     conn.release();
   }
 }
+
+//customer transaction history
+export async function getCustomerTransactionHistoryService({
+  customerId,
+  fromDate,
+  toDate,
+  type,
+  limit = 10,
+  page = 1,
+}) {
+  const offset = (page - 1) * limit;
+  let params = [customerId, customerId, customerId];
+
+  let baseSql = `
+    (
+      SELECT 
+        s.id AS ref_id,
+        'Purchased' AS type,
+        s.invoice_no AS reference,
+        s.total_amount AS amount,
+        s.customer_id,
+        c.name AS customer_name,
+        s.user_id,
+        s.status,
+        s.paid_amount paid,
+        s.due_amount due,
+        s.payment_method method,
+        u.name AS seller_name,
+        DATE_FORMAT(
+          CONVERT_TZ(s.created_at,'+00:00','+00:00'),
+          '%Y-%m-%d %H:%i:%s'
+        ) AS created_at
+      FROM sales s
+      JOIN customers c ON c.id = s.customer_id
+      JOIN users u ON u.id = s.user_id
+      WHERE s.customer_id = ?
+    )
+
+    UNION ALL
+
+    (
+      SELECT 
+        p.id AS ref_id,
+        IF(p.payment_type='due_payment','DuePayment','Payment') AS type,
+        p.reference_no AS reference,
+        p.amount,
+        p.customer_id,
+        c.name AS customer_name,
+        p.user_id,
+        p.payment_type AS status,
+        p.amount paid,
+        NULL AS due,
+        p.method method,
+        u.name AS seller_name,
+        DATE_FORMAT(
+          CONVERT_TZ(p.created_at,'+00:00','+00:00'),
+          '%Y-%m-%d %H:%i:%s'
+        ) AS created_at
+      FROM payments p
+      JOIN customers c ON c.id = p.customer_id
+      JOIN users u ON u.id = p.user_id
+      WHERE p.customer_id = ?
+    )
+
+    UNION ALL
+
+    (
+      SELECT 
+        r.id AS ref_id,
+        'Refund' AS type,
+        r.sale_id AS reference,
+        r.refund_amount AS amount,
+        r.customer_id,
+        c.name AS customer_name,
+        r.user_id,
+        NULL AS status,
+        r.refund_amount paid,
+        NULL AS due,
+        r.refund_method method,
+        u.name AS seller_name,
+        DATE_FORMAT(
+          CONVERT_TZ(r.created_at,'+00:00','+00:00'),
+          '%Y-%m-%d %H:%i:%s'
+        ) AS created_at
+      FROM refunds r
+      JOIN customers c ON c.id = r.customer_id
+      JOIN users u ON u.id = r.user_id
+      WHERE r.customer_id = ?
+    )
+  `;
+
+  let sql = `SELECT * FROM (${baseSql}) t WHERE 1=1`;
+
+  if (type) {
+    sql += ` AND t.type = ?`;
+    params.push(type);
+  }
+
+
+  if (fromDate && toDate) {
+    sql += ` AND DATE(t.created_at) BETWEEN ? AND ?`;
+    params.push(fromDate, toDate);
+  }
+
+  sql += ` ORDER BY t.created_at DESC LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  const [rows] = await pool.query(sql, params);
+  return rows;
+}
+
+
+
+//customer transaction count
+export async function getCustomerTransactionCount({
+  customerId,
+  fromDate,
+  toDate,
+  type,
+}) {
+  let params = [customerId, customerId, customerId];
+
+  let baseSql = `
+    (
+      SELECT s.id, s.created_at, 'Purchased' AS type
+      FROM sales s
+      WHERE s.customer_id = ?
+    )
+
+    UNION ALL
+
+    (
+      SELECT p.id, p.created_at,
+      IF(p.payment_type='due_payment','DuePayment','Payment') AS type
+      FROM payments p
+      WHERE p.customer_id = ?
+    )
+
+    UNION ALL
+
+    (
+      SELECT r.id, r.created_at, 'Refund' AS type
+      FROM refunds r
+      WHERE r.customer_id = ?
+    )
+  `;
+
+  let sql = `
+    SELECT
+      COUNT(*) AS total_transactions,
+      SUM(CASE WHEN type = 'Purchased' THEN 1 ELSE 0 END) AS purchased_count,
+      SUM(CASE WHEN type = 'Payment' THEN 1 ELSE 0 END) AS payment_count,
+      SUM(CASE WHEN type = 'DuePayment' THEN 1 ELSE 0 END) AS duepayment_count,
+      SUM(CASE WHEN type = 'Refund' THEN 1 ELSE 0 END) AS refund_count
+      FROM (${baseSql}) t 
+      WHERE 1=1
+      `;
+
+  // type filter
+  if (type) {
+    sql += ` AND t.type = ?`;
+    params.push(type);
+  }
+
+  // date filter
+  if (fromDate && toDate) {
+    sql += ` AND DATE(t.created_at) BETWEEN ? AND ?`;
+    params.push(fromDate, toDate);
+  }
+
+  const [[row]] = await pool.query(sql, params);
+  return row;
+}
+
+export async function getCustomerSalesItemsService(
+  saleId,
+  customerId,
+  userId
+) {
+  const [rows] = await pool.query(
+    `
+    SELECT 
+      si.*,
+      si.subtotal total,
+      p.name product_name,
+      p.image_url image,
+      s.invoice_no AS invoice,
+      DATE_FORMAT(
+        CONVERT_TZ(si.created_at,'+00:00','+00:00'),
+        '%d-%m-%Y %I:%i %p'
+      ) AS created_at,
+      u.name AS user_name,
+      c.name AS customer
+    FROM sales s
+    JOIN sale_items si ON si.sale_id = s.id
+    JOIN products p ON p.id = si.product_id
+    LEFT JOIN users u ON s.user_id = u.id
+    LEFT JOIN customers c ON s.customer_id = c.id
+    WHERE 
+      s.id = ?
+      AND s.user_id = ?
+      AND s.customer_id = ?
+    ORDER BY si.id DESC
+    `,
+    [saleId, userId, customerId]
+  );
+
+  return rows;
+}
+
+
 
 // Delete customer
 export async function deleteCustomerService(id) {

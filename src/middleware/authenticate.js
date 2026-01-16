@@ -15,6 +15,6 @@ export default function authenticate(req, res, next) {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 
-  req.user = decoded;
+  req.user = decoded; //user.id,user.role,user.iat,user.exp
   next();
 }
