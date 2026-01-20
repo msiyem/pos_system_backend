@@ -4,6 +4,7 @@ import {
   completePendingSaleService,
   getCustomerPurchasedProductsService,
   getCustomerSaleProductsService,
+  getCustomerPurchaseSummaryService,
 } from "../services/sales.service.js";
 import * as cartService from "../services/cart.service.js";
 
@@ -93,6 +94,39 @@ export const getCutomerPurchasedProducts = async (req, res) => {
     });
   }
 };
+
+export const getCustomerPurchaseSummaryController = async (req, res) => {
+  const { customerId } = req.params;
+  const { fromDate, toDate } = req.query;
+
+  if (!customerId) {
+    return res.status(400).json({
+      success: false,
+      message: "customerId is required",
+    });
+  }
+
+  try {
+    const summary = await getCustomerPurchaseSummaryService(
+      customerId,
+      fromDate,
+      toDate
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: summary,
+    });
+  } catch (err) {
+    console.error("Customer purchase summary error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch customer purchase summary",
+      error: err.message,
+    });
+  }
+};
+
 
 export const getCustomerSaleProducts = async (req, res) => {
   try {

@@ -52,35 +52,62 @@ export async function getCustomerTransaction(req, res) {
       limit: Number(limit),
     });
 
+    return res.status(200).json({
+      success: true,
+      data,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+      error: "Failed to fetch customer transactions",
+    });
+  }
+}
+
+export async function getCustomerTransactionSummary(req, res) {
+  const { id } = req.params;
+  const { fromDate, toDate, type, limit = 10 } = req.query;
+
+  try {
+    if (!id) {
+      return res.status(400).json({ message: "Customer ID is required" });
+    }
+
     const summary = await getCustomerTransactionCount({
       customerId: Number(id),
       fromDate,
       toDate,
       type: type && type !== "All" ? type : undefined,
     });
+
     const total = Number(summary?.total_transactions || 0);
+
     return res.status(200).json({
       success: true,
-      data,
+
       total_transactions: summary?.total_transactions || 0,
       purchased_count: summary?.purchased_count || 0,
       payment_count: summary?.payment_count || 0,
       duepayment_count: summary?.duepayment_count || 0,
       refund_count: summary?.refund_count || 0,
+
       pagination: {
         totalPage: Math.ceil(total / Number(limit)),
-        page: Number(page),
-        limit: Number(limit),
         total,
       },
     });
   } catch (err) {
     res.status(500).json({
       message: err.message,
-      error: "Failed to fetch transactions",
+      error: "Failed to fetch customer transaction summary",
     });
   }
 }
+
 
 export async function getCustomerSalesItemsController(req, res) {
   const { customerId, saleId } = req.params;

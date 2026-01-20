@@ -388,6 +388,36 @@ export async function getCustomerPurchasedProductsService({
   return rows;
 }
 
+export async function getCustomerPurchaseSummaryService(
+  customerId,
+  fromDate,
+  toDate
+) {
+  let params = [customerId];
+
+  let sql = `
+    SELECT
+      COUNT(DISTINCT s.id) AS totalTimesPurchased,
+      COUNT(DISTINCT si.product_id) AS totalProductsPurchased,
+      COALESCE(SUM(si.quantity), 0) AS totalQuantity,
+      COALESCE(SUM(si.quantity * si.price), 0) AS totalAmount
+    FROM sales s
+    JOIN sale_items si ON si.sale_id = s.id
+    WHERE s.customer_id = ?
+      AND s.status = 'completed'
+  `;
+
+  if (fromDate && toDate) {
+    sql += ` AND DATE(s.created_at) BETWEEN ? AND ? `;
+    params.push(fromDate, toDate);
+  }
+
+  const [rows] = await pool.query(sql, params);
+  return rows[0]; 
+}
+
+
+
 export async function getSalesService(status) {
   const [rows] = await pool.query(
     `
