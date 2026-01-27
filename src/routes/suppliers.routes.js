@@ -14,7 +14,7 @@ import { getSupplierDueDetailsController, supplierDuePaymentController } from ".
 const router = express.Router();
 
 
-router.get("/suppliers", authorize("admin"), getSuppliers);
+router.get("/suppliers", authorize("admin","staff"), getSuppliers);
 
 router.get("/suppliers/:id/details", getSupplierDetails);
 

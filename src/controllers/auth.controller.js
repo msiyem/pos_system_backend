@@ -1,7 +1,7 @@
 import { loginUser } from "../services/auth.service.js";
 import { findUserByEmail } from "../services/user.service.js";
 import { verifyRefreshToken, signAccessToken } from "../utils/jwt.js";
-import { getUserDetails } from "../services/users.service.js";
+import { getUserDetailsService } from "../services/users.service.js";
 import { env } from "../config/env.js";
 
 export async function login(req, res) {
@@ -47,7 +47,8 @@ export async function refresh(req, res) {
     return res.status(401).json({ message: "Invalid or expired refresh token" });
   }
 
-    const users = await getUserDetails(decoded.id);
+    const users = await getUserDetailsService(decoded.id);
+    
     const user=users[0];
     if(!user){
       return res.status(401).json({message: "User not found!"});

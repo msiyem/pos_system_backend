@@ -46,7 +46,7 @@ export async function createPurchaseService(user_id, data) {
       throw new Error("Total amount mismatch. Please refresh.");
     }
 
-    const allowedMethods = ["cash", "bank", "bkash","nagad","due"];
+    const allowedMethods = ["cash", "bank", "bkash", "nagad", "due"];
     if (!allowedMethods.includes(payment_method)) {
       throw new Error("Invalid payment method");
     }
@@ -61,7 +61,7 @@ export async function createPurchaseService(user_id, data) {
       `INSERT INTO purchases 
       (supplier_id, total_amount, paid_amount, due_amount,user_id) 
       VALUES (?,?,?,?,?)`,
-      [supplier_id, calTotal, paid_amount, due_amount,user_id],
+      [supplier_id, calTotal, paid_amount, due_amount, user_id],
     );
 
     const purchase_id = p.insertId;
@@ -307,7 +307,7 @@ export async function getSupplierTransactionHistoryService({
   const offset = (page - 1) * limit;
 
   let params = [supplier_id, supplier_id];
-  
+
   const baseSql = `
     (
       SELECT 
@@ -447,12 +447,12 @@ export async function getSupplierTransactionCount({
 }
 
 export async function getSupplierPurchaseItemsService(
+  user_id,
   purchaseId,
   supplierId,
-  userId
 ) {
-  const [rows] = await pool.query(
-    `
+  let params = [purchaseId, supplierId];
+  let sql = `
     SELECT 
       pi.*,
       pi.subtotal AS total,
@@ -472,80 +472,20 @@ export async function getSupplierPurchaseItemsService(
     LEFT JOIN suppliers s ON p.supplier_id = s.id
     WHERE 
       p.id = ?
-      AND p.user_id = ?
       AND p.supplier_id = ?
-    ORDER BY pi.id DESC
-    `,
-    [purchaseId, userId, supplierId]
-  );
+    `;
+
+  if (user_id) {
+    sql += ` AND p.user_id = ?`;
+    params.push(user_id);
+  }
+
+  sql += ` ORDER BY pi.id DESC`;
+
+  const [rows] = await pool.query(sql, params);
 
   return rows;
 }
-
-
-
-
-//customer transaction count
-export async function getCustomerTransactionCount({
-  customerId,
-  fromDate,
-  toDate,
-  type,
-}) {
-  let params = [customerId, customerId, customerId];
-
-  let baseSql = `
-    (
-      SELECT s.id, s.created_at, 'Purchased' AS type
-      FROM sales s
-      WHERE s.customer_id = ?
-    )
-
-    UNION ALL
-
-    (
-      SELECT p.id, p.created_at,
-      IF(p.payment_type='due_payment','DuePayment','Payment') AS type
-      FROM payments p
-      WHERE p.customer_id = ?
-    )
-
-    UNION ALL
-
-    (
-      SELECT r.id, r.created_at, 'Refund' AS type
-      FROM refunds r
-      WHERE r.customer_id = ?
-    )
-  `;
-
-  let sql = `
-    SELECT
-      COUNT(*) AS total_transactions,
-      SUM(CASE WHEN type = 'Purchased' THEN 1 ELSE 0 END) AS purchased_count,
-      SUM(CASE WHEN type = 'Payment' THEN 1 ELSE 0 END) AS payment_count,
-      SUM(CASE WHEN type = 'DuePayment' THEN 1 ELSE 0 END) AS duepayment_count,
-      SUM(CASE WHEN type = 'Refund' THEN 1 ELSE 0 END) AS refund_count
-      FROM (${baseSql}) t 
-      WHERE 1=1
-      `;
-
-  // type filter
-  if (type) {
-    sql += ` AND t.type = ?`;
-    params.push(type);
-  }
-
-  // date filter
-  if (fromDate && toDate) {
-    sql += ` AND DATE(t.created_at) BETWEEN ? AND ?`;
-    params.push(fromDate, toDate);
-  }
-
-  const [[row]] = await pool.query(sql, params);
-  return row;
-}
-
 
 
 // Get purchase list

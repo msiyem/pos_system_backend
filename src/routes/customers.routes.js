@@ -11,8 +11,15 @@ import {
   getCustomerTransactionSummary,
 } from "../controllers/customers.controller.js";
 import { authorize } from "../middleware/authorize.js";
-import { getCustomerPurchaseSummaryController, getCustomerSaleProducts, getCutomerPurchasedProducts } from "../controllers/sales.controller.js";
-import { duePaymentController, getDueDetailsController } from "../controllers/duepayment.controller.js";
+import {
+  getCustomerPurchaseSummaryController,
+  getCustomerSaleProducts,
+  getCutomerPurchasedProducts,
+} from "../controllers/sales.controller.js";
+import {
+  duePaymentController,
+  getDueDetailsController,
+} from "../controllers/duepayment.controller.js";
 
 const router = express.Router();
 
@@ -20,56 +27,45 @@ router.get("/customers", authorize("admin", "staff"), getCustomers);
 router.get(
   "/customers/:id/details",
   authorize("admin", "staff"),
-  getCustomerDetails
+  getCustomerDetails,
 );
-router.get(
-  "/customers/:id/transactions",
-  getCustomerTransaction
-);
+router.get("/customers/:id/transactions", getCustomerTransaction);
 
 router.get(
   "/customers/:id/transactions/summary",
-  getCustomerTransactionSummary
+  getCustomerTransactionSummary,
 );
 
 router.get(
   "/customers/:customerId/sales/:saleId/items",
-  getCustomerSalesItemsController
+  getCustomerSalesItemsController,
 );
 
 router.get(
   "/customers/:customerId/purchased_products",
-  getCutomerPurchasedProducts
+  getCutomerPurchasedProducts,
 );
 
 router.get(
   "/customers/:customerId/products_summary",
-  getCustomerPurchaseSummaryController
+  getCustomerPurchaseSummaryController,
 );
 
 router.get(
   "/customers/:customer_id/purchased_products/:product_id",
-  getCustomerSaleProducts
+  getCustomerSaleProducts,
 );
 
-router.get(
-  "/customers/:customer_id/dues",
-  getDueDetailsController
-);
+router.get("/customers/:customer_id/dues", getDueDetailsController);
 
 router.post(
   "/customers/",
   authorize("admin", "staff"),
   upload.single("image"),
-  addCustomer
+  addCustomer,
 );
 
-router.post(
-  "/customers/:customer_id/dues",
-  duePaymentController
-);
-
-
+router.post("/customers/:customer_id/dues", duePaymentController);
 
 router.put(
   "/customers/:id",
@@ -80,7 +76,7 @@ router.put(
   //   console.log("AFTER MULTER FILE:", req.file);
   //   next();
   // },
-  updateCustomer
+  updateCustomer,
 );
 router.delete("/customers/:id", authorize("admin", "staff"), deleteCustomer);
 

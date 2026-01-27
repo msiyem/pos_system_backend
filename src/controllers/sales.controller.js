@@ -33,7 +33,7 @@ export async function completePending(req, res) {
       sale_id,
       req.user.id,
       paid_amount,
-      payment_method
+      payment_method,
     );
     res.json(result);
   } catch (err) {
@@ -64,6 +64,9 @@ export async function getAllSales(req, res) {
 }
 
 export const getCutomerPurchasedProducts = async (req, res) => {
+  let user_id = null;
+  const user_role = req.user?.role;
+  if (user_role !== "admin") user_id = req.user?.id;
   const { customerId } = req.params;
   const { fromDate, toDate, page = 1, limit = 10 } = req.query;
 
@@ -75,6 +78,7 @@ export const getCutomerPurchasedProducts = async (req, res) => {
       });
     }
     const rows = await getCustomerPurchasedProductsService({
+      user_id,
       customerId,
       fromDate,
       toDate,
@@ -96,6 +100,10 @@ export const getCutomerPurchasedProducts = async (req, res) => {
 };
 
 export const getCustomerPurchaseSummaryController = async (req, res) => {
+  let user_id = null;
+  const user_role = req.user?.role;
+  if (user_role !== "admin") user_id = req.user?.id;
+
   const { customerId } = req.params;
   const { fromDate, toDate } = req.query;
 
@@ -108,9 +116,10 @@ export const getCustomerPurchaseSummaryController = async (req, res) => {
 
   try {
     const summary = await getCustomerPurchaseSummaryService(
+      user_id,
       customerId,
       fromDate,
-      toDate
+      toDate,
     );
 
     return res.status(200).json({
@@ -127,17 +136,15 @@ export const getCustomerPurchaseSummaryController = async (req, res) => {
   }
 };
 
-
 export const getCustomerSaleProducts = async (req, res) => {
   try {
-    const {
-      fromDate,
-      toDate,
-      page = 1,
-      limit = 10,
-    } = req.query;
-    const {customer_id,product_id}=req.params;
-    const user_id = req.user?.id;
+    const { fromDate, toDate, page = 1, limit = 10 } = req.query;
+    const { customer_id, product_id } = req.params;
+
+    let user_id = null;
+    const user_role = req.user?.role;
+
+    if (user_role !== "admin") user_id = req.user?.id;
 
     if (!customer_id || !product_id) {
       return res.status(400).json({
@@ -153,7 +160,7 @@ export const getCustomerSaleProducts = async (req, res) => {
       fromDate,
       toDate,
       Number(page),
-      Number(limit)
+      Number(limit),
     );
 
     res.status(200).json({

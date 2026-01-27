@@ -21,14 +21,13 @@ const storage = new CloudinaryStorage({
     return {
       folder: `pos_system_${base}`,
       allowed_formats: ["jpg", "png", "jpeg", "webp"],
-      transformation: [{ quality: "auto", fetch_format: "auto" }],
     };
   },
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 15 * 1024 * 1024 },
 });
 
 export { cloudinary };

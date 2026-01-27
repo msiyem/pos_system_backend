@@ -2,21 +2,37 @@ import { cloudinary } from "../config/cloudinary.js";
 import pool from "../config/db.js";
 
 // Get all customers (pagination + search)
-export async function getCustomersService(query) {
+export async function getCustomersService(user_role, query) {
   let { page, limit, search } = query;
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 9;
   const offset = (page - 1) * limit;
+
   let sql = `
     SELECT 
-      c.*,
-      DATE_FORMAT(c.birthday, '%d-%m-%Y') AS birthday,
-      DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
-    FROM customers c
+      c.id,
+      c.name,
+      c.email,
+      c.district,
+      c.phone,
+      c.status,
+      c.image_url,
+      c.debt,
+      DATE_FORMAT(c.join_at, '%d-%m-%Y %I:%i %p') AS join_at,
+      DATE_FORMAT(c.last_purchased, '%d-%m-%Y %I:%i %p') AS last_purchased
   `;
 
-  let countsql = `SELECT COUNT(*) as total FROM customers c`;
+  if (user_role === "admin") {
+    sql += `,
+      u.name AS user_name
+      FROM customers c
+      LEFT JOIN users u ON u.id = c.created_by
+    `;
+  } else {
+    sql += ` FROM customers c `;
+  }
+
+  let countsql = `SELECT COUNT(*) AS total FROM customers c`;
   const params = [];
 
   if (search) {
@@ -25,11 +41,14 @@ export async function getCustomersService(query) {
     params.push(`%${search}%`);
   }
 
-  sql += ` ORDER BY c.id LIMIT ? OFFSET ?`;
+  sql += ` ORDER BY c.last_purchased DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
   const [rows] = await pool.query(sql, params);
-  const [countRows] = await pool.query(countsql, search ? [`%${search}%`] : []);
+  const [countRows] = await pool.query(
+    countsql,
+    search ? [`%${search}%`] : []
+  );
 
   return {
     data: rows,
@@ -39,25 +58,62 @@ export async function getCustomersService(query) {
   };
 }
 
+
 // Get customer details
-export async function getCustomerDetailsService(id) {
-  const [rows] = await pool.query(
-    `
+export async function getCustomerDetailsService(user_role,id) {
+
+  let sql = `
     SELECT 
-      c.*,
-      DATE_FORMAT(c.birthday, '%Y-%m-%d') AS birthday,
-      DATE_FORMAT(CONVERT_TZ(c.join_at,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS join_at,
-      DATE_FORMAT(CONVERT_TZ(c.last_purchased,'+00:00','+00:00'), '%d-%m-%Y %I:%i %p') AS last_purchased
-    FROM customers c
-    WHERE c.id = ?
-    `,
-    [id]
+      c.id,
+      c.name,
+      c.email,
+      c.gender,
+      c.division,
+      c.district,
+      c.city,
+      c.area,
+      c.post_code,
+      c.sector,
+      c.road,
+      c.house,
+      c.phone,
+      c.alt_phone,
+      c.whatsapp,
+      c.verify,
+      c.status,
+      c.image_url,
+      c.debt,
+      DATE_FORMAT(c.birthday, '%d-%m-%Y ') AS birthday,
+      DATE_FORMAT(c.join_at, '%d-%m-%Y %I:%i %p') AS join_at,
+      DATE_FORMAT(c.last_purchased, '%d-%m-%Y %I:%i %p') AS last_purchased
+  `;
+
+  if (user_role === "admin") {
+    sql += `,
+      u.name AS created_by,
+      up.name AS updated_by,
+      DATE_FORMAT(c.updated_at, '%d-%m-%Y %I:%i %p') AS updated_at
+      FROM customers c
+      LEFT JOIN users u ON u.id = c.created_by
+      LEFT JOIN users up ON up.id = c.updated_by
+    `;
+  } else {
+    sql += ` 
+    FROM customers c 
+    `;
+  }
+
+  sql+=`
+  WHERE c.id = ?`
+  
+  const [rows] = await pool.query(
+    sql,[id],
   );
   return rows;
 }
 
 // Add new customer
-export async function addCustomerService(data, image_url, image_public_id) {
+export async function addCustomerService(user_id,data, image_url, image_public_id) {
   const {
     name,
     gender,
@@ -85,8 +141,8 @@ export async function addCustomerService(data, image_url, image_public_id) {
     `INSERT INTO customers (
       name, gender, birthday, debt, total_orders, status, notes,
       division, district, city, area, post_code, sector, road, house,
-      phone, alt_phone, whatsapp, email, verify, image_url, image_public_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?)`,
+      phone, alt_phone, whatsapp, email, verify, image_url, image_public_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?)`,
     [
       name,
       gender || "male",
@@ -110,7 +166,8 @@ export async function addCustomerService(data, image_url, image_public_id) {
       verify || 0,
       image_url,
       image_public_id,
-    ]
+      user_id,
+    ],
   );
 
   return rows.insertId;
@@ -118,17 +175,18 @@ export async function addCustomerService(data, image_url, image_public_id) {
 
 // Update customer
 export async function updateCustomerService(
+  user_id,
   id,
   data,
   image_url,
-  image_public_id
+  image_public_id,
 ) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const [existingCustomer] = await conn.query(
       "SELECT * FROM customers WHERE id=?",
-      [id]
+      [id],
     );
     if (!existingCustomer.length) {
       await conn.rollback();
@@ -192,11 +250,11 @@ export async function updateCustomerService(
           ? Number(verify)
           : Number(oldCust.verify ?? 0),
 
-      image_url: removeImage ? null : image_url ?? oldCust.image_url,
+      image_url: removeImage ? null : (image_url ?? oldCust.image_url),
 
       image_public_id: removeImage
         ? null
-        : image_public_id ?? oldCust.image_public_id,
+        : (image_public_id ?? oldCust.image_public_id),
     };
 
     await conn.query(
@@ -204,7 +262,7 @@ export async function updateCustomerService(
       SET name=?, 
       gender=?, birthday=?, debt=?, total_orders=?, status=?, notes=?, 
       division=?, district=?, city=?, area=?, post_code=?, sector=?, road=?, house=?,
-      phone=?, alt_phone=?, whatsapp=?, email=?, verify=?,image_url=?,image_public_id=?
+      phone=?, alt_phone=?, whatsapp=?, email=?, verify=?,image_url=?,image_public_id=?,updated_by = ?, updated_at = NOW()
       WHERE id=?`,
       [
         updatedCustomer.name,
@@ -229,8 +287,9 @@ export async function updateCustomerService(
         updatedCustomer.verify,
         updatedCustomer.image_url,
         updatedCustomer.image_public_id,
+        user_id,
         id,
-      ]
+      ],
     );
 
     await conn.commit();
@@ -244,6 +303,7 @@ export async function updateCustomerService(
 
 //customer transaction history
 export async function getCustomerTransactionHistoryService({
+  user_id,
   customerId,
   fromDate,
   toDate,
@@ -339,6 +399,10 @@ export async function getCustomerTransactionHistoryService({
     params.push(type);
   }
 
+  if (user_id) {
+    sql += ` AND t.user_id = ?`;
+    params.push(user_id);
+  }
 
   if (fromDate && toDate) {
     sql += ` AND DATE(t.created_at) BETWEEN ? AND ?`;
@@ -352,10 +416,9 @@ export async function getCustomerTransactionHistoryService({
   return rows;
 }
 
-
-
 //customer transaction count
 export async function getCustomerTransactionCount({
+  user_id,
   customerId,
   fromDate,
   toDate,
@@ -365,7 +428,7 @@ export async function getCustomerTransactionCount({
 
   let baseSql = `
     (
-      SELECT s.id, s.created_at, 'Purchased' AS type
+      SELECT s.id, s.created_at, s.user_id, 'Purchased' AS type
       FROM sales s
       WHERE s.customer_id = ?
     )
@@ -373,7 +436,7 @@ export async function getCustomerTransactionCount({
     UNION ALL
 
     (
-      SELECT p.id, p.created_at,
+      SELECT p.id, p.created_at, p.user_id,
       IF(p.payment_type='due_payment','DuePayment','Payment') AS type
       FROM payments p
       WHERE p.customer_id = ?
@@ -382,7 +445,7 @@ export async function getCustomerTransactionCount({
     UNION ALL
 
     (
-      SELECT r.id, r.created_at, 'Refund' AS type
+      SELECT r.id, r.created_at, r.user_id, 'Refund' AS type
       FROM refunds r
       WHERE r.customer_id = ?
     )
@@ -405,6 +468,11 @@ export async function getCustomerTransactionCount({
     params.push(type);
   }
 
+  if (user_id) {
+    sql += ` AND t.user_id = ?`;
+    params.push(user_id);
+  }
+
   // date filter
   if (fromDate && toDate) {
     sql += ` AND DATE(t.created_at) BETWEEN ? AND ?`;
@@ -415,13 +483,8 @@ export async function getCustomerTransactionCount({
   return row;
 }
 
-export async function getCustomerSalesItemsService(
-  saleId,
-  customerId,
-  userId
-) {
-  const [rows] = await pool.query(
-    `
+export async function getCustomerSalesItemsService(saleId, customerId, userId) {
+  let sql = `
     SELECT 
       si.*,
       si.subtotal total,
@@ -440,18 +503,23 @@ export async function getCustomerSalesItemsService(
     LEFT JOIN users u ON s.user_id = u.id
     LEFT JOIN customers c ON s.customer_id = c.id
     WHERE 
-      s.id = ?
-      AND s.user_id = ?
-      AND s.customer_id = ?
-    ORDER BY si.id DESC
-    `,
-    [saleId, userId, customerId]
-  );
+      s.id = ? `;
+  let params = [saleId];
+  if (customerId) {
+    sql += ` AND s.customer_id = ?`;
+    params.push(customerId);
+  }
+
+  if (userId) {
+    sql += ` AND s.user_id = ?`;
+    params.push(userId);
+  }
+
+  sql += ` ORDER BY si.id DESC`;
+  const [rows] = await pool.query(sql, params);
 
   return rows;
 }
-
-
 
 // Delete customer
 export async function deleteCustomerService(id) {

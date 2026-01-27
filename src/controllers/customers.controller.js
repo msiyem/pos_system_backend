@@ -12,7 +12,8 @@ import {
 // Get all customers
 export async function getCustomers(req, res) {
   try {
-    const result = await getCustomersService(req.query);
+    const user_role = req.user?.role;
+    const result = await getCustomersService(user_role,req.query);
     res.json({ success: true, message: "Fetched successfully", ...result });
   } catch (err) {
     console.error(err);
@@ -22,8 +23,9 @@ export async function getCustomers(req, res) {
 
 // Get customer details
 export async function getCustomerDetails(req, res) {
+  const user_role = req.user?.role;
   try {
-    const rows = await getCustomerDetailsService(req.params.id);
+    const rows = await getCustomerDetailsService(user_role,req.params.id);
     if (!rows.length)
       return res.status(404).json({ message: "Customer not found" });
     res.json(rows[0]);
@@ -35,6 +37,9 @@ export async function getCustomerDetails(req, res) {
 
 //Get customer transaction history
 export async function getCustomerTransaction(req, res) {
+  let user_id = null;
+  const user_role = req.user?.role;
+  if(user_role !== 'admin') user_id = req.user?.id;
   const { id } = req.params;
   const { fromDate, toDate, type, page = 1, limit = 10 } = req.query;
 
@@ -44,6 +49,7 @@ export async function getCustomerTransaction(req, res) {
     }
 
     const data = await getCustomerTransactionHistoryService({
+      user_id,
       customerId: Number(id),
       fromDate,
       toDate,
@@ -71,6 +77,9 @@ export async function getCustomerTransaction(req, res) {
 export async function getCustomerTransactionSummary(req, res) {
   const { id } = req.params;
   const { fromDate, toDate, type, limit = 10 } = req.query;
+  let user_id = null;
+  const user_role = req.user?.role;
+  if(user_role !== 'admin') user_id = req.user?.id;
 
   try {
     if (!id) {
@@ -78,6 +87,7 @@ export async function getCustomerTransactionSummary(req, res) {
     }
 
     const summary = await getCustomerTransactionCount({
+      user_id,
       customerId: Number(id),
       fromDate,
       toDate,
@@ -111,7 +121,9 @@ export async function getCustomerTransactionSummary(req, res) {
 
 export async function getCustomerSalesItemsController(req, res) {
   const { customerId, saleId } = req.params;
-  const userId = req.user.id;
+  let userId = null;
+  const user_role = req.user?.role;
+  if(user_role !== 'admin') userId = req.user.id;
   try {
     if (!saleId || !customerId) {
       return res.status(400).json({
@@ -143,6 +155,7 @@ export async function getCustomerSalesItemsController(req, res) {
 // Add new customer
 export async function addCustomer(req, res) {
   try {
+    const user_id = req.user.id;
     let image_url = null;
     let image_public_id = null;
     if (req.file) {
@@ -150,6 +163,7 @@ export async function addCustomer(req, res) {
       image_public_id = req.file?.filename;
     }
     const customerId = await addCustomerService(
+      user_id,
       req.body,
       image_url,
       image_public_id
@@ -166,20 +180,19 @@ export async function addCustomer(req, res) {
 
 // Update customer
 export async function updateCustomer(req, res) {
+  const user_id = req.user.id;
   let image_url = null;
   let image_public_id = null;
+  
 
   if (req.file) {
     image_url = req.file.path;
     image_public_id = req.file.filename;
   }
 
-  if (req.body.removeImage === "true") {
-    image_url = null;
-    image_public_id = null;
-  }
   try {
     await updateCustomerService(
+      user_id,
       req.params.id,
       req.body,
       image_url,

@@ -211,7 +211,10 @@ export async function getSupplierTransactionSummary(req, res) {
 
 export async function getSupplierPurchaseItemsController(req, res) {
   const { supplierId, purchaseId } = req.params;
-  const userId = req.user.id;
+  const user_role = req.user?.role;
+  let user_id = null;
+
+  if(user_role !== "admin") user_id = req.user?.id;
 
   try {
     if (!purchaseId || !supplierId) {
@@ -222,9 +225,9 @@ export async function getSupplierPurchaseItemsController(req, res) {
     }
 
     const items = await getSupplierPurchaseItemsService(
+      user_id,
       purchaseId,
-      supplierId,
-      userId
+      supplierId
     );
 
     return res.status(200).json({

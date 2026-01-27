@@ -2,7 +2,6 @@ import cors from "cors";
 
 const allowedOrigins = [
   "http://localhost:5173",   // Vite
-  "http://localhost:5174",
   "http://localhost:3000",   // React
 ];
 

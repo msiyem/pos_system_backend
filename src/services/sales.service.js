@@ -348,6 +348,7 @@ export async function getCustomerSaleProductsService(
 }
 
 export async function getCustomerPurchasedProductsService({
+  user_id,
   customerId,
   fromDate,
   toDate,
@@ -374,6 +375,11 @@ export async function getCustomerPurchasedProductsService({
       AND s.status = 'completed'
   `;
 
+  if(user_id){
+    sql+=` AND s.user_id = ?`;
+    params.push(user_id);
+  }
+
   if (fromDate && toDate) {
     sql += ` AND DATE(s.created_at) BETWEEN ? AND ?`;
     params.push(fromDate, toDate);
@@ -389,6 +395,7 @@ export async function getCustomerPurchasedProductsService({
 }
 
 export async function getCustomerPurchaseSummaryService(
+  user_id,
   customerId,
   fromDate,
   toDate
@@ -406,6 +413,11 @@ export async function getCustomerPurchaseSummaryService(
     WHERE s.customer_id = ?
       AND s.status = 'completed'
   `;
+  
+  if(user_id){
+    sql+=` AND s.user_id = ?`;
+    params.push(user_id);
+  }
 
   if (fromDate && toDate) {
     sql += ` AND DATE(s.created_at) BETWEEN ? AND ? `;
