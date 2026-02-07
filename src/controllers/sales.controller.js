@@ -6,7 +6,6 @@ import {
   getCustomerSaleProductsService,
   getCustomerPurchaseSummaryService,
 } from "../services/sales.service.js";
-import * as cartService from "../services/cart.service.js";
 
 export async function checkoutSale(req, res) {
   try {

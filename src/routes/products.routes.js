@@ -2,6 +2,7 @@ import express from "express";
 import upload from "../config/cloudinary.js";
 import {
   getProducts,
+  getProductById,
   addProduct,
   updateProduct,
   deleteProduct,
@@ -11,17 +12,18 @@ import { authorize } from "../middleware/authorize.js";
 const router = express.Router();
 
 router.get("/products", authorize("admin", "staff"), getProducts);
+router.get("/products/:id", authorize("admin", "staff"), getProductById);
 router.post(
   "/products",
   authorize("admin", "staff"),
   upload.single("image"),
-  addProduct
+  addProduct,
 );
 router.put(
   "/products/:id",
   authorize("admin", "staff"),
   upload.single("image"),
-  updateProduct
+  updateProduct,
 );
 router.delete("/products/:id", authorize("admin", "staff"), deleteProduct);
 

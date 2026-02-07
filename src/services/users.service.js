@@ -2,25 +2,26 @@ import pool from "../config/db.js";
 import bcrypt from "bcrypt";
 import { cloudinary } from "../config/cloudinary.js";
 
-export async function isUserExists(email,  username = null) {
-  username = username?.trim() || null
+export async function isUserExists(email, username = null) {
+  username = username?.trim() || null;
   if (username) {
     const [[user]] = await pool.query(
       `SELECT id FROM users WHERE email=? OR username=? LIMIT 1`,
-      [email, username]
+      [email, username],
     );
     return !!user;
   }
 
   const [[user]] = await pool.query(
     `SELECT id FROM users WHERE email=? LIMIT 1`,
-    [email]
+    [email],
   );
   return !!user;
 }
 
 export async function getUserOwnDetailsService(user_id) {
-  const [rows] = await pool.query(`
+  const [rows] = await pool.query(
+    `
     SELECT 
       name,
       email,
@@ -29,21 +30,30 @@ export async function getUserOwnDetailsService(user_id) {
       image_url,
       role
     FROM users
-    WHERE users.id = ? LIMIT 1`,[user_id]);
-    return rows[0];
-  
+    WHERE users.id = ? LIMIT 1`,
+    [user_id],
+  );
+  return rows[0];
 }
 
 export async function getUsersService(query) {
-  let { page, limit, search } = query;
+  let { page, limit, search, role = null } = query;
   page = Number(page) || 1;
   limit = Number(limit) || 10;
   const offset = (page - 1) * limit;
 
   let sql = `
     SELECT 
-      u.id, u.name, u.username, u.email, u.phone,
-      u.role, u.status, u.verify,
+      u.id, 
+      u.name, 
+      u.username,
+      u.email, 
+      u.phone,
+      u.district,
+      u.house,
+      u.role, 
+      u.status, 
+      u.verify,
       u.image_url,
       DATE_FORMAT(u.created_at,'%Y-%m-%d %I:%i %p') AS created_at,
       DATE_FORMAT(u.updated_at,'%Y-%m-%d %I:%i %p') AS updated_at
@@ -51,22 +61,34 @@ export async function getUsersService(query) {
   `;
 
   let countSql = `SELECT COUNT(*) total FROM users u`;
+
+  const conditions = [];
   const params = [];
+  const countParams = [];
 
   if (search) {
-    sql += ` WHERE u.name LIKE ? OR u.email LIKE ?`;
-    countSql += ` WHERE u.name LIKE ? OR u.email LIKE ?`;
+    conditions.push(`(u.name LIKE ? OR u.email LIKE ?)`);
     params.push(`%${search}%`, `%${search}%`);
+    countParams.push(`%${search}%`, `%${search}%`);
+  }
+
+  if (role) {
+    conditions.push(`u.role = ?`);
+    params.push(role);
+    countParams.push(role);
+  }
+
+  if (conditions.length) {
+    const whereClause = ` WHERE ${conditions.join(" AND ")}`;
+    sql += whereClause;
+    countSql += whereClause;
   }
 
   sql += ` ORDER BY u.id DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
   const [rows] = await pool.query(sql, params);
-  const [[count]] = await pool.query(
-    countSql,
-    search ? [`%${search}%`, `%${search}%`] : [],
-  );
+  const [[count]] = await pool.query(countSql, countParams);
 
   return { data: rows, total: count.total, page, limit };
 }
@@ -75,11 +97,36 @@ export async function getUserDetailsService(id) {
   const [rows] = await pool.query(
     `
     SELECT 
-      u.*,
+      u.id,
+      u.name,
+      u.username,
+      u.email,
+      u.phone,
+      u.alt_phone,
+      u.whatsapp,
+      u.gender,
+      u.role,
+      u.status,
+      u.verify,
+      u.division,
+      u.district,
+      u.city,
+      u.area,
+      u.post_code,
+      u.road,
+      u.house,
+      u.image_url,
+      u.image_public_id,
+      u.created_by,
+      u.updated_by,
+      creator.name AS created_by_name,
+      updater.name AS updated_by_name,
       DATE_FORMAT(u.birthday, '%Y-%m-%d') AS birthday,
-      DATE_FORMAT(u.created_at,'%Y-%m-%d') AS created_at,
-      DATE_FORMAT(u.updated_at,'%Y-%m-%d') AS updated_at
+      DATE_FORMAT(u.created_at,'%Y-%m-%d %I:%i %p') AS created_at,
+      DATE_FORMAT(u.updated_at,'%Y-%m-%d %I:%i %p') AS updated_at
     FROM users u
+    LEFT JOIN users creator ON u.created_by = creator.id
+    LEFT JOIN users updater ON u.updated_by = updater.id
     WHERE u.id=?
     `,
     [id],
@@ -275,4 +322,93 @@ export async function updateUserStatusService(userId, status) {
 export async function deleteUserService(id) {
   const [result] = await pool.query("DELETE FROM users WHERE id=?", [id]);
   if (!result.affectedRows) throw new Error("User not found");
+}
+
+// ===== User Performance (Sales) =====
+export async function getUserPerformanceService(userId, fromDate, toDate) {
+  if (!userId) throw new Error("userId required");
+
+  // Default: last 30 days if dates not provided
+  let start = fromDate?.trim() || null;
+  let end = toDate?.trim() || null;
+
+  if (!start || !end) {
+    const now = new Date();
+    const past = new Date();
+    past.setDate(now.getDate() - 30);
+    start = past.toISOString().slice(0, 10);
+    end = now.toISOString().slice(0, 10);
+  }
+
+  const params = [userId, start, end];
+
+  const [[summary]] = await pool.query(
+    `
+    SELECT
+      COUNT(*)               AS orders,
+      COALESCE(SUM(total_amount),0) AS totalAmount,
+      COALESCE(SUM(paid_amount),0)  AS totalPaid,
+      COALESCE(SUM(due_amount),0)   AS totalDue,
+      COALESCE(AVG(total_amount),0) AS avgOrderValue,
+      COUNT(DISTINCT customer_id)   AS uniqueCustomers
+    FROM sales s
+    WHERE s.user_id = ?
+      AND s.status = 'completed'
+      AND DATE(s.created_at) BETWEEN ? AND ?
+    `,
+    params,
+  );
+
+  const [[items]] = await pool.query(
+    `
+    SELECT COALESCE(SUM(si.quantity),0) AS itemsSold
+    FROM sales s
+    JOIN sale_items si ON si.sale_id = s.id
+    WHERE s.user_id = ?
+      AND s.status = 'completed'
+      AND DATE(s.created_at) BETWEEN ? AND ?
+    `,
+    params,
+  );
+
+  const [byDay] = await pool.query(
+    `
+    SELECT 
+      DATE(s.created_at) AS day,
+      COUNT(*) AS orders,
+      COALESCE(SUM(s.total_amount),0) AS revenue,
+      COALESCE(SUM(s.paid_amount),0)  AS paid,
+      COALESCE(SUM(s.due_amount),0)   AS due
+    FROM sales s
+    WHERE s.user_id = ?
+      AND s.status = 'completed'
+      AND DATE(s.created_at) BETWEEN ? AND ?
+    GROUP BY DATE(s.created_at)
+    ORDER BY day DESC
+    `,
+    params,
+  );
+
+  const [byPaymentMethod] = await pool.query(
+    `
+    SELECT 
+      s.payment_method,
+      COUNT(*) AS orders,
+      COALESCE(SUM(s.total_amount),0) AS revenue
+    FROM sales s
+    WHERE s.user_id = ?
+      AND s.status = 'completed'
+      AND DATE(s.created_at) BETWEEN ? AND ?
+    GROUP BY s.payment_method
+    ORDER BY revenue DESC
+    `,
+    params,
+  );
+
+  return {
+    range: { fromDate: start, toDate: end },
+    summary: { ...summary, itemsSold: Number(items?.itemsSold || 0) },
+    byDay,
+    byPaymentMethod,
+  };
 }

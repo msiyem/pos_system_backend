@@ -1,11 +1,8 @@
-import bcrypt from "bcrypt";
-import {
-  signAccessToken,
-  signRefreshToken,
-} from "../utils/jwt.js";
+import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
+import { comparePassword } from "../utils/hash.js";
 
 export async function loginUser(user, password) {
-  const match = await bcrypt.compare(password, user.password);
+  const match = await comparePassword(password, user.password);
   if (!match) throw new Error("Invalid credentials");
 
   const accessToken = signAccessToken(user);

@@ -81,7 +81,7 @@ export async function getCustomerDetailsService(user_role,id) {
       c.whatsapp,
       c.verify,
       c.status,
-      c.image_url,
+      c.image_url AS image,
       c.debt,
       DATE_FORMAT(c.birthday, '%d-%m-%Y ') AS birthday,
       DATE_FORMAT(c.join_at, '%d-%m-%Y %I:%i %p') AS join_at,

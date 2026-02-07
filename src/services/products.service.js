@@ -44,12 +44,21 @@ export async function getProductsService({
       p.id, p.name, p.description, p.sku, p.price, p.stock, p.image_url,
       b.name AS brand_name,
       c.name AS category_name,
+      COALESCE(sold_30d.total_qty, 0) AS sold_last_30_days,
       p.created_at, p.updated_at
     FROM products p
     LEFT JOIN brands b ON p.brand_id = b.id
     LEFT JOIN categories c ON p.category_id = c.id
+    LEFT JOIN (
+      SELECT si.product_id, SUM(si.quantity) AS total_qty
+      FROM sale_items si
+      INNER JOIN sales s ON s.id = si.sale_id
+      WHERE s.status = 'completed'
+        AND s.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      GROUP BY si.product_id
+    ) sold_30d ON p.id = sold_30d.product_id
     ${whereClause}
-    ORDER BY p.id DESC
+    ORDER BY sold_last_30_days DESC, p.id DESC
     LIMIT ? OFFSET ?
   `;
 
@@ -100,7 +109,7 @@ export async function addProductService({
       category_id,
       image_url,
       image_public_id,
-    ]
+    ],
   );
   return result.insertId;
 }
@@ -110,7 +119,7 @@ export async function updateProductService(
   id,
   data,
   image_url,
-  image_public_id
+  image_public_id,
 ) {
   const conn = await pool.getConnection();
   try {
@@ -127,9 +136,10 @@ export async function updateProductService(
     }
 
     await pool.query(
-      `UPDATE products 
-     SET name=?, description=?, sku=?, status=?, price=?, brand_id=?, category_id=?, image_url=?, image_public_id=? updated_at=CURRENT_TIMESTAMP
-     WHERE id=?`,
+      `
+      UPDATE products 
+      SET name=?, description=?, sku=?, status=?, price=?, brand_id=?, category_id=?, image_url=?, image_public_id=?, updated_at=CURRENT_TIMESTAMP
+      WHERE id=?`,
       [
         data.name ?? old.name,
         data.description ?? old.description,
@@ -141,12 +151,12 @@ export async function updateProductService(
         data.image_url ?? old.image_url,
         data.image_public_id ?? old.image_public_id,
         id,
-      ]
+      ],
     );
   } catch (err) {
     await conn.rollback();
     throw err;
-  }finally{
+  } finally {
     conn.release();
   }
 }

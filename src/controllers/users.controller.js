@@ -6,6 +6,7 @@ import {
   deleteUserService,
   isUserExists,
   getUserOwnDetailsService,
+  getUserPerformanceService,
 } from "../services/users.service.js";
 import { addUserSchema } from "../validators/user.validator.js";
 
@@ -138,5 +139,32 @@ export async function deleteUser(req, res) {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
+  }
+}
+
+export async function getUserPerformance(req, res) {
+  try {
+    const userId = Number(req.params.id);
+    const { fromDate, toDate } = req.query;
+    if (!Number.isFinite(userId)) {
+      return res.status(400).json({ success: false, message: "Invalid user id" });
+    }
+
+    const data = await getUserPerformanceService(userId, fromDate, toDate);
+    res.json({ success: true, message: "Fetched successfully", data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+export async function getMyPerformance(req, res) {
+  try {
+    const { fromDate, toDate } = req.query;
+    const data = await getUserPerformanceService(req.user.id, fromDate, toDate);
+    res.json({ success: true, message: "Fetched successfully", data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: err.message });
   }
 }

@@ -10,7 +10,7 @@ export function signAccessToken(user) {
     env.jwt.accessSecret,
     {
       expiresIn: env.jwt.expiresIn,
-    }
+    },
   );
 }
 
@@ -22,7 +22,7 @@ export function signRefreshToken(user) {
     env.jwt.refreshSecret,
     {
       expiresIn: env.jwt.refreshExpiresIn,
-    }
+    },
   );
 }
 
@@ -40,4 +40,20 @@ export function verifyRefreshToken(token) {
   } catch (error) {
     return null;
   }
+}
+
+export function getTokenExpiry(token) {
+  const decoded = jwt.decode(token);
+  if (!decoded?.exp) {
+    return null;
+  }
+  return new Date(decoded.exp * 1000);
+}
+
+export function getTokenMaxAgeMs(token) {
+  const expiresAt = getTokenExpiry(token);
+  if (!expiresAt) {
+    return null;
+  }
+  return Math.max(0, expiresAt.getTime() - Date.now());
 }

@@ -10,6 +10,7 @@ import salesRoutes from "./routes/sales.routes.js";
 // import purchasesRoutes from "./routes/purchases.routes.js";
 import expensesRoutes from "./routes/expenses.routes.js";
 import inventoryRoutes from "./routes/inventory.routes.js";
+import dashboardRoutes from "./routes/deshboard.routes.js";
 
 export default {
   // Public routes
@@ -27,5 +28,6 @@ export default {
     salesRoutes,
     expensesRoutes,
     inventoryRoutes,
+    dashboardRoutes,
   ],
 };

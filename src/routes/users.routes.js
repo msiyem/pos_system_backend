@@ -6,6 +6,8 @@ import {
   getUserOwnDetails,
   getUsers,
   updateUser,
+  getUserPerformance,
+  getMyPerformance,
 } from "../controllers/users.controller.js";
 import { authorize } from "../middleware/authorize.js";
 import upload from "../config/cloudinary.js";
@@ -14,7 +16,9 @@ const router = express.Router();
 
 router.get("/users", authorize("admin"), getUsers);
 router.get("/users/me",authorize("admin","staff"),getUserOwnDetails);
+router.get("/users/me/performance", authorize("admin","staff"), getMyPerformance);
 router.get("/users/:id", authorize("admin"), getUserDetails);
+router.get("/users/:id/performance", authorize("admin"), getUserPerformance);
 
 router.post("/users",
   authorize("admin"),

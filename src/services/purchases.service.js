@@ -90,9 +90,9 @@ export async function createPurchaseService(user_id, data) {
       await conn.query(
         ` 
         INSERT INTO purchase_items 
-        (purchase_id, product_id, quantity, price, subtotal) 
-        VALUES (?,?,?,?,?)`,
-        [purchase_id, product_id, quantity, price, subtotal],
+        (purchase_id, product_id, quantity, price, subtotal, qty_remaining) 
+        VALUES (?,?,?,?,?,?)`,
+        [purchase_id, product_id, quantity, price, subtotal, quantity],
       );
 
       // update stock
@@ -486,7 +486,6 @@ export async function getSupplierPurchaseItemsService(
 
   return rows;
 }
-
 
 // Get purchase list
 export async function getPurchasesService() {

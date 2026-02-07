@@ -4,6 +4,155 @@ function pad(n, width = 6) {
   return n.toString().padStart(width, "0");
 }
 
+
+async function recordSaleCogs(conn, sale_id, saleItems) {
+  for (const saleItem of saleItems) {
+    const [batches] = await conn.query(
+      `
+      SELECT 
+        sib.quantity,
+        sib.buy_price
+      FROM sale_item_batches sib
+      WHERE sib.sale_item_id = ?
+      `,
+      [saleItem.id],
+    );
+
+    if (batches && batches.length > 0) {
+      let totalCost = 0;
+      for (const batch of batches) {
+        totalCost += batch.quantity * batch.buy_price;
+      }
+
+      await conn.query(
+        `
+        INSERT INTO sale_cogs
+        (sale_id, product_id, quantity, cost_price, total_cost)
+        VALUES (?, ?, ?, ?, ?)
+        `,
+        [
+          sale_id,
+          saleItem.product_id,
+          saleItem.quantity,
+          (totalCost / saleItem.quantity).toFixed(2), // avg cost per unit
+          totalCost.toFixed(2),
+        ],
+      );
+    }
+  }
+}
+
+async function consumeStockFIFO({
+  conn,
+  product_id,
+  sale_item_id,
+  requiredQty,
+}) {
+  let remaining = requiredQty;
+
+
+  await conn.query(
+    `
+    UPDATE purchase_items
+    SET qty_remaining = quantity
+    WHERE product_id = ? AND qty_remaining IS NULL
+    `,
+    [product_id],
+  );
+
+  const [batches] = await conn.query(
+    `
+    SELECT id, qty_remaining, price
+    FROM purchase_items
+    WHERE product_id = ?
+      AND qty_remaining > 0
+    ORDER BY created_at ASC
+    FOR UPDATE
+    `,
+    [product_id],
+  );
+
+  for (const batch of batches) {
+    if (remaining <= 0) break;
+
+    const usedQty = Math.min(batch.qty_remaining, remaining);
+
+    await conn.query(
+      `
+      INSERT INTO sale_item_batches
+      (sale_item_id, purchase_item_id, quantity, buy_price)
+      VALUES (?,?,?,?)
+      `,
+      [sale_item_id, batch.id, usedQty, batch.price],
+    );
+
+    await conn.query(
+      `
+      UPDATE purchase_items
+      SET qty_remaining = qty_remaining - ?
+      WHERE id = ?
+      `,
+      [usedQty, batch.id],
+    );
+
+    remaining -= usedQty;
+  }
+
+  // Fallback: If no batches found (old data), use average purchase price
+  if (remaining > 0) {
+    const [[avgResult]] = await conn.query(
+      `
+      SELECT 
+        COALESCE(AVG(price), 0) as avg_price,
+        COALESCE(SUM(qty_remaining), 0) as total_remaining
+      FROM purchase_items
+      WHERE product_id = ? AND qty_remaining > 0
+      `,
+      [product_id],
+    );
+
+    if (avgResult && avgResult.total_remaining >= remaining) {
+      // Create one batch record with average price for remaining units
+      await conn.query(
+        `
+        INSERT INTO sale_item_batches
+        (sale_item_id, purchase_item_id, quantity, buy_price)
+        VALUES (?, ?, ?, ?)
+        `,
+        [sale_item_id, null, remaining, avgResult.avg_price || 0],
+      );
+
+      // Update the most recent batch to deduct remaining qty
+      const [[lastBatch]] = await conn.query(
+        `
+        SELECT id FROM purchase_items
+        WHERE product_id = ? AND qty_remaining > 0
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [product_id],
+      );
+
+      if (lastBatch) {
+        await conn.query(
+          `
+          UPDATE purchase_items
+          SET qty_remaining = GREATEST(0, qty_remaining - ?)
+          WHERE id = ?
+          `,
+          [remaining, lastBatch.id],
+        );
+      }
+
+      remaining = 0;
+    }
+  }
+
+  if (remaining > 0) {
+    throw new Error(`Insufficient stock for product ID ${product_id}`);
+  }
+}
+
 export async function createSaleService(user_id, data, status = "completed") {
   const {
     customer_id = null,
@@ -17,15 +166,15 @@ export async function createSaleService(user_id, data, status = "completed") {
   } = data;
 
   if (!user_id) throw new Error("user_id required");
+  if (!Array.isArray(items) || items.length === 0)
+    throw new Error("items required");
 
   const conn = await pool.getConnection();
+
   try {
     await conn.beginTransaction();
 
-    // ---------- Normal Sale ----------
-    if (!Array.isArray(items) || items.length === 0)
-      throw new Error("items required");
-
+    /* ---------- CALCULATION ---------- */
     let calcSubtotal = 0;
     for (const it of items) {
       const q = Number(it.quantity);
@@ -40,10 +189,8 @@ export async function createSaleService(user_id, data, status = "completed") {
     const calcTax = Number(Number(tax || 0).toFixed(2));
     const calcDiscount = Number(Number(discount || 0).toFixed(2));
     const calcTotal = Number(
-      (calcSubtotal + calcTax - calcDiscount).toFixed(2)
+      (calcSubtotal + calcTax - calcDiscount).toFixed(2),
     );
-
-    // const totalPayable = calcTotal + cusDebt;
 
     const paid_amount =
       status === "pending" || payment_method === "due"
@@ -66,10 +213,13 @@ export async function createSaleService(user_id, data, status = "completed") {
       throw new Error("Total amount mismatch. Please refresh cart.");
     }
 
+    /* ---------- SALE INSERT ---------- */
     const [s] = await conn.query(
-      `INSERT INTO sales 
-      (customer_id, user_id, subtotal, tax, discount, total_amount, paid_amount, due_amount, payment_method,status)
-      VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      `
+      INSERT INTO sales
+      (customer_id, user_id, subtotal, tax, discount, total_amount, paid_amount, due_amount, payment_method, status)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
+      `,
       [
         customer_id,
         user_id,
@@ -81,70 +231,117 @@ export async function createSaleService(user_id, data, status = "completed") {
         due_amount,
         payment_method,
         status,
-      ]
+      ],
     );
 
     const sale_id = s.insertId;
     const invoicePrefix = status === "pending" ? "P" : "S";
-    const invoice_no = `INV-${invoicePrefix}${pad(sale_id, 6)}`;
+    const invoice_no = `INV-${invoicePrefix}${pad(sale_id)}`;
 
-    await conn.query("UPDATE sales SET invoice_no = ? WHERE id = ?", [
+    await conn.query(`UPDATE sales SET invoice_no = ? WHERE id = ?`, [
       invoice_no,
       sale_id,
     ]);
 
+    /* ---------- ITEMS LOOP ---------- */
     for (const it of items) {
       const product_id = it.product_id;
       const quantity = Number(it.quantity);
       const price = Number(it.price);
       const itemSubtotal = Number((quantity * price).toFixed(2));
 
-      const [prodRows] = await conn.query(
-        "SELECT stock FROM products WHERE id = ? FOR UPDATE",
-        [product_id]
+      const [[prod]] = await conn.query(
+        `SELECT stock FROM products WHERE id = ? FOR UPDATE`,
+        [product_id],
       );
 
-      if (!prodRows.length) throw new Error(`Product not found: ${product_id}`);
-      if (Number(prodRows[0].stock) < quantity)
+      if (!prod) throw new Error(`Product not found: ${product_id}`);
+      if (Number(prod.stock) < quantity)
         throw new Error(`Not enough stock for product ID ${product_id}`);
 
-      await conn.query(
-        "INSERT INTO sale_items (sale_id, product_id, quantity, price, subtotal) VALUES (?,?,?,?,?)",
-        [sale_id, product_id, quantity, price, itemSubtotal]
+      const [si] = await conn.query(
+        `
+        INSERT INTO sale_items
+        (sale_id, product_id, quantity, price, subtotal)
+        VALUES (?,?,?,?,?)
+        `,
+        [sale_id, product_id, quantity, price, itemSubtotal],
       );
 
       if (status === "completed") {
-        await conn.query("UPDATE products SET stock = stock - ? WHERE id = ?", [
+        await consumeStockFIFO({
+          conn,
+          product_id,
+          sale_item_id: si.insertId,
+          requiredQty: quantity,
+        });
+
+        await conn.query(`UPDATE products SET stock = stock - ? WHERE id = ?`, [
           quantity,
           product_id,
         ]);
 
         await conn.query(
-          "INSERT INTO inventory_log (product_id, change_qty, reason, reference) VALUES (?,?,?,?)",
-          [product_id, -quantity, "SALE", invoice_no]
+          `
+          INSERT INTO inventory_log
+          (product_id, change_qty, reason, reference)
+          VALUES (?,?,?,?)
+          `,
+          [product_id, -quantity, "SALE", invoice_no],
         );
       }
     }
 
+    // Record COGS after all FIFO consumption is complete
+    if (status === "completed") {
+      const [saleItems] = await conn.query(
+        `SELECT id, product_id, quantity FROM sale_items WHERE sale_id = ?`,
+        [sale_id],
+      );
+      await recordSaleCogs(conn, sale_id, saleItems);
+    }
+
+    /* ---------- CUSTOMER / PAYMENT ---------- */
     if (customer_id && status === "completed") {
       await conn.query(
-        "UPDATE customers SET debt = debt + ?,total_orders = total_orders + 1, last_purchased = NOW() WHERE id = ?",
-        [due_amount, customer_id]
+        `
+        UPDATE customers
+        SET debt = debt + ?,
+            total_orders = total_orders + 1,
+            last_purchased = NOW()
+        WHERE id = ?
+        `,
+        [due_amount, customer_id],
       );
 
       await conn.query(
-        "INSERT INTO payments (customer_id,sale_id,user_id,amount,payment_type,method,direction,reference_no) VALUES (?,?,?,?,?,?,?,?) ",
-        [customer_id,sale_id,user_id,paid_amount,"payment",payment_method,"in",invoice_no]
-      )
+        `
+        INSERT INTO payments
+        (customer_id, sale_id, user_id, amount, payment_type, method, direction, reference_no)
+        VALUES (?,?,?,?,?,?,?,?)
+        `,
+        [
+          customer_id,
+          sale_id,
+          user_id,
+          paid_amount,
+          "payment",
+          payment_method,
+          "in",
+          invoice_no,
+        ],
+      );
 
       if (due_amount > 0) {
         await conn.query(
-          `INSERT INTO customer_dues (customer_id, sale_id, due_amount, created_by) VALUES (?,?,?,?)`,
-          [customer_id, sale_id, due_amount, user_id]
+          `
+          INSERT INTO customer_dues
+          (customer_id, sale_id, due_amount, created_by)
+          VALUES (?,?,?,?)
+          `,
+          [customer_id, sale_id, due_amount, user_id],
         );
       }
-
-
     }
 
     await conn.commit();
@@ -161,6 +358,7 @@ export async function createSaleService(user_id, data, status = "completed") {
         total: calcTotal,
         paid_amount,
         due_amount,
+        status,
       },
     };
   } catch (err) {
@@ -175,7 +373,7 @@ export async function completePendingSaleService(
   sale_id,
   user_id,
   paid_amount = 0,
-  payment_method = "cash"
+  payment_method = "cash",
 ) {
   if (!sale_id) throw new Error("sale_id required");
   if (!user_id) throw new Error("user_id required");
@@ -185,85 +383,94 @@ export async function completePendingSaleService(
   try {
     await conn.beginTransaction();
 
-    // ---------- Get sale ----------
     const [[sale]] = await conn.query(
       `SELECT * FROM sales WHERE id = ? FOR UPDATE`,
-      [sale_id]
+      [sale_id],
     );
 
     if (!sale) throw new Error("Sale not found");
     if (sale.status !== "pending")
       throw new Error("Only pending sales can be completed");
 
-    // ---------- Get sale items ----------
     const [items] = await conn.query(
       `SELECT * FROM sale_items WHERE sale_id = ?`,
-      [sale_id]
+      [sale_id],
     );
 
-    if (!items.length) throw new Error("No sale items found for this sale");
+    if (!items.length) throw new Error("No sale items found");
 
-    // ---------- Stock validation ----------
     for (const it of items) {
       const [[prod]] = await conn.query(
         `SELECT stock FROM products WHERE id = ? FOR UPDATE`,
-        [it.product_id]
+        [it.product_id],
       );
 
-      if (!prod) throw new Error(`Product not found: ${it.product_id}`);
-
-      if (Number(prod.stock) < it.quantity)
+      if (!prod || Number(prod.stock) < it.quantity)
         throw new Error(`Not enough stock for product ID ${it.product_id}`);
     }
 
-    // ---------- Deduct stock + inventory log ----------
     for (const it of items) {
+      await consumeStockFIFO({
+        conn,
+        product_id: it.product_id,
+        sale_item_id: it.id,
+        requiredQty: it.quantity,
+      });
+
       await conn.query(`UPDATE products SET stock = stock - ? WHERE id = ?`, [
         it.quantity,
         it.product_id,
       ]);
 
       await conn.query(
-        `INSERT INTO inventory_log
+        `
+        INSERT INTO inventory_log
         (product_id, change_qty, reason, reference)
-        VALUES (?,?,?,?)`,
-        [it.product_id, -it.quantity, "SALE", sale.invoice_no]
+        VALUES (?,?,?,?)
+        `,
+        [it.product_id, -it.quantity, "SALE", sale.invoice_no],
       );
     }
 
-    // ---------- Payment ----------
+    // Record COGS after all FIFO consumption is complete
+    await recordSaleCogs(conn, sale_id, items);
+
     const total = Number(sale.total_amount);
     const paid = Math.min(Number(paid_amount || 0), total);
     const due = Math.max(total - paid, 0);
 
-    // ---------- Update sale ----------
     await conn.query(
-      `UPDATE sales
+      `
+      UPDATE sales
       SET paid_amount = ?,
           due_amount = ?,
           payment_method = ?,
           status = 'completed'
-      WHERE id = ?`,
-      [paid, due, payment_method, sale_id]
+      WHERE id = ?
+      `,
+      [paid, due, payment_method, sale_id],
     );
 
-    // ---------- Customer update ----------
     if (sale.customer_id) {
       await conn.query(
-        `UPDATE customers
+        `
+        UPDATE customers
         SET debt = debt + ?,
             total_orders = total_orders + 1,
             last_purchased = NOW()
-        WHERE id = ?`,
-        [due, sale.customer_id]
+        WHERE id = ?
+        `,
+        [due, sale.customer_id],
       );
 
       if (due > 0) {
         await conn.query(
-          `INSERT INTO customer_dues
+          `
+          INSERT INTO customer_dues
           (customer_id, sale_id, due_amount, created_by)
-          VALUES (?,?,?,?)`,
-          [sale.customer_id, sale_id, due, user_id]
+          VALUES (?,?,?,?)
+          `,
+          [sale.customer_id, sale_id, due, user_id],
         );
       }
     }
@@ -296,12 +503,12 @@ export async function getCustomerSaleProductsService(
   product_id,
   fromDate,
   toDate,
-  page=1,
-  limit=10,
+  page = 1,
+  limit = 10,
 ) {
-  const offset = (page-1) *limit;
+  const offset = (page - 1) * limit;
   let params = [];
-  let sql=`SELECT 
+  let sql = `SELECT 
     si.product_id,
     si.sale_id,
     s.invoice_no invoice,
@@ -343,7 +550,7 @@ export async function getCustomerSaleProductsService(
 
   sql += ` ORDER BY si.created_at DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
-  const [rows] = await pool.query(sql,params);
+  const [rows] = await pool.query(sql, params);
   return rows;
 }
 
@@ -375,8 +582,8 @@ export async function getCustomerPurchasedProductsService({
       AND s.status = 'completed'
   `;
 
-  if(user_id){
-    sql+=` AND s.user_id = ?`;
+  if (user_id) {
+    sql += ` AND s.user_id = ?`;
     params.push(user_id);
   }
 
@@ -398,7 +605,7 @@ export async function getCustomerPurchaseSummaryService(
   user_id,
   customerId,
   fromDate,
-  toDate
+  toDate,
 ) {
   let params = [customerId];
 
@@ -413,9 +620,9 @@ export async function getCustomerPurchaseSummaryService(
     WHERE s.customer_id = ?
       AND s.status = 'completed'
   `;
-  
-  if(user_id){
-    sql+=` AND s.user_id = ?`;
+
+  if (user_id) {
+    sql += ` AND s.user_id = ?`;
     params.push(user_id);
   }
 
@@ -425,10 +632,8 @@ export async function getCustomerPurchaseSummaryService(
   }
 
   const [rows] = await pool.query(sql, params);
-  return rows[0]; 
+  return rows[0];
 }
-
-
 
 export async function getSalesService(status) {
   const [rows] = await pool.query(
@@ -442,7 +647,7 @@ export async function getSalesService(status) {
     WHERE s.status = ?
     ORDER BY s.id DESC
   `,
-    [status]
+    [status],
   );
 
   return rows;
