@@ -2,6 +2,60 @@
 
 A Node.js + Express REST API for a point-of-sale system. It provides authentication, user and catalog management, inventory, sales, purchases, expenses, and dashboard analytics. Built with MySQL, JWT auth, and a clean service/controller structure.
 
+A scalable, production-grade **Sales, Inventory, POS, Accounting & Customer Management Backend** designed for real-world business operations. 
+
+This system is built with a **normalized relational database architecture**, ensuring **data integrity, performance, and auditability**.
+
+---
+
+## 🚀 Key Features
+
+### 🔐 Authentication & Security
+- Secure user management with role-based access control (Admin, Staff, Manager)
+- Refresh token–based authentication
+- Account verification & audit-ready login tracking
+
+### 🛒 Sales Management
+- Invoice-based sales processing
+- Partial & full payments
+- Discount, tax, and due calculation
+- Refund handling with proper ledger impact
+- Cost of Goods Sold (COGS) tracking
+
+### 📦 Inventory Control
+- Real-time stock updates
+- Purchase batch tracking (FIFO-ready)
+- Inventory change logs with references
+- Automatic stock reconciliation after sales & refunds
+
+### 👥 Customer & Supplier Management
+- Customer dues & payment history
+- Supplier payable tracking
+- Complete profile & transaction lifecycle
+- Address & contact normalization
+
+### 💰 Accounting & Payments
+- Unified payment system (cash, bkash, nagad, card, etc.)
+- Inward & outward money flow
+- Customer & supplier balance automation
+
+### 📊 Reporting-Ready Architecture
+- Sales analytics
+- Stock movement analysis
+- Outstanding dues & payable summaries
+- Audit-friendly transaction history
+
+---
+
+## 🏗️ System Architecture Overview
+
+- **Database-Driven Business Logic**
+- **Strong Foreign Key Relationships**
+- **Transactional Consistency**
+- **Scalable for Multi-Store Expansion**
+
+
+
 ## Highlights
 
 - Modular routes, controllers, services, and validators
@@ -86,6 +140,88 @@ On startup, the app seeds a default admin if none exists:
 - Password: `admin123`
 
 Change these credentials in production.
+
+## Database Schema
+
+The following ER diagram represents the complete relational database design
+used in this system, covering sales, inventory, accounting, and authentication.
+
+![Database ER Diagram](docs/er-diagram.svg)
+
+
+---
+
+## 🗂️ Database Design Highlights
+
+### Core Domains
+- **Users & Authentication**
+- **Products, Categories & Brands**
+- **Sales, Purchases & Returns**
+- **Inventory & Batch Tracking**
+- **Payments, Expenses & Accounting**
+- **Customers & Suppliers**
+
+### Design Principles
+- Fully normalized schema
+- Explicit financial flow separation
+- Clear ownership & traceability
+- Minimal redundancy
+- High query performance
+
+---
+
+## 📚 Major Tables (High-Level)
+
+| Module | Tables |
+|------|-------|
+| Authentication | `users`, `refresh_tokens` |
+| Product | `products`, `categories`, `brands` |
+| Inventory | `inventory_log`, `purchase_items`, `sale_item_batches` |
+| Sales | `sales`, `sale_items`, `sale_cogs`, `refunds` |
+| Purchases | `purchases`, `purchase_items` |
+| Accounting | `payments`, `expenses`, `tax_rates` |
+| Customers | `customers`, `customer_dues` |
+| Suppliers | `suppliers`, `supplier_dues` |
+| Cart System | `carts`, `cart_items` |
+
+---
+
+## 🔄 Inventory & COGS Flow
+
+1. Purchase creates **purchase batches**
+2. Sale consumes stock using **batch mapping**
+3. COGS calculated per sale item
+4. Inventory log records every stock mutation
+5. Refund restores stock and updates financials
+
+✔ FIFO-ready  
+✔ Audit-safe  
+✔ Accounting-accurate  
+
+---
+
+## 🧠 Business Logic Philosophy
+
+- **Database is the single source of truth**
+- Financial records are **immutable**
+- Stock changes are **event-based**
+- Payments are **direction-aware** (`in` / `out`)
+- Every monetary action is traceable
+
+---
+
+
+## 📈 Scalability & Future Enhancements
+
+- Multi-store support
+- Warehouse module
+- Advanced financial ledger
+- Profit & loss statements
+- Role-based reporting dashboards
+- API rate limiting & monitoring
+
+---
+
 
 ## API Reference
 
@@ -447,3 +583,12 @@ Response
 ## License
 
 ISC
+
+
+---
+
+## ⭐ Final Note
+
+This project is designed with **real-world business complexity** in mind and follows **industry-grade backend engineering practices**.
+
+If you find this useful, consider giving it a ⭐ on GitHub.
