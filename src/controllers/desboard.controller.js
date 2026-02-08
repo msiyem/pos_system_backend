@@ -430,14 +430,6 @@ export async function getMyTransactionSummary(req, res) {
   }
 }
 
-// =====================================================
-// FINANCIAL METRICS CONTROLLERS - INDUSTRY STANDARD
-// =====================================================
-
-/**
- * Get comprehensive financial summary
- * Endpoint: GET /dashboard/financial-summary?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
 export async function getFinancialSummary(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -481,10 +473,7 @@ export async function getFinancialSummary(req, res) {
   }
 }
 
-/**
- * Get daily sales trends
- * Endpoint: GET /dashboard/daily-trends?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
+
 export async function getDailySalesTrend(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -531,10 +520,7 @@ export async function getDailySalesTrend(req, res) {
   }
 }
 
-/**
- * Get top products by revenue
- * Endpoint: GET /dashboard/top-products?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD&limit=10
- */
+
 export async function getTopProducts(req, res) {
   try {
     const { fromDate, toDate, limit = 10 } = req.query;
@@ -585,10 +571,6 @@ export async function getTopProducts(req, res) {
   }
 }
 
-/**
- * Get customer payment analysis
- * Endpoint: GET /dashboard/customer-analysis?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
 export async function getCustomerAnalysis(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -635,22 +617,7 @@ export async function getCustomerAnalysis(req, res) {
   }
 }
 
-/**
- * COMPREHENSIVE CUSTOMER ANALYSIS - INDUSTRY STANDARD
- * Endpoint: GET /dashboard/comprehensive-customer-analysis?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- *
- * Returns complete customer insights including:
- * - Customer overview metrics
- * - Top customers by revenue
- * - Customer segmentation (VIP, Regular, Occasional, One-Time)
- * - Customer lifetime value (CLV)
- * - Purchase behavior patterns
- * - Long time due customers (aging buckets)
- * - Retention & churn analysis
- * - Geographic distribution
- * - Demographics insights
- * - Recent customer activity
- */
+
 export async function getComprehensiveCustomerAnalysis(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -720,10 +687,6 @@ export async function getComprehensiveCustomerAnalysis(req, res) {
   }
 }
 
-/**
- * Get staff sales performance
- * Endpoint: GET /dashboard/staff-performance?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
 export async function getStaffPerformance(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -770,10 +733,7 @@ export async function getStaffPerformance(req, res) {
   }
 }
 
-/**
- * Get payment method breakdown
- * Endpoint: GET /dashboard/payment-breakdown?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
+
 export async function getPaymentBreakdown(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -820,10 +780,7 @@ export async function getPaymentBreakdown(req, res) {
   }
 }
 
-/**
- * Get tax summary
- * Endpoint: GET /dashboard/tax-summary?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
+
 export async function getTaxSummary(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -870,10 +827,6 @@ export async function getTaxSummary(req, res) {
   }
 }
 
-/**
- * Get profit & loss statement
- * Endpoint: GET /dashboard/profit-loss?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
- */
 export async function getProfitLossStatement(req, res) {
   try {
     const { fromDate, toDate } = req.query;
@@ -920,9 +873,6 @@ export async function getProfitLossStatement(req, res) {
   }
 }
 
-/**
- * Get inventory alerts - low stock, out of stock, overstock
- */
 export async function getInventoryAlerts(req, res) {
   try {
     const data = await getInventoryAlertsService();
@@ -949,9 +899,6 @@ export async function getInventoryAlerts(req, res) {
   }
 }
 
-/**
- * Get stock movement analysis
- */
 export async function getStockMovement(req, res) {
   try {
     let { days = 30 } = req.query;
@@ -985,9 +932,6 @@ export async function getStockMovement(req, res) {
   }
 }
 
-/**
- * Get reorder recommendations
- */
 export async function getReorderRecommendations(req, res) {
   try {
     let { days = 30 } = req.query;
@@ -1021,9 +965,6 @@ export async function getReorderRecommendations(req, res) {
   }
 }
 
-/**
- * Get inventory valuation
- */
 export async function getInventoryValuation(req, res) {
   try {
     const data = await getInventoryValuationService();
@@ -1050,9 +991,6 @@ export async function getInventoryValuation(req, res) {
   }
 }
 
-/**
- * Get detailed product-level inventory with purchase history
- */
 export async function getDetailedInventory(req, res) {
   try {
     let { limit = 50 } = req.query;
@@ -1086,10 +1024,6 @@ export async function getDetailedInventory(req, res) {
   }
 }
 
-/**
- * Get comprehensive product analysis for dashboard
- * Top/Bottom sellers, profit leaders, category performance
- */
 export async function getProductAnalysis(req, res) {
   try {
     let { fromDate, toDate, days = 30 } = req.query;
@@ -1148,7 +1082,6 @@ export async function getProductAnalysis(req, res) {
   }
 }
 
-// COMPREHENSIVE FINANCIAL ANALYSIS
 export async function getComprehensiveFinancialAnalysis(req, res) {
   try {
     let { fromDate, toDate, days = 30 } = req.query;
