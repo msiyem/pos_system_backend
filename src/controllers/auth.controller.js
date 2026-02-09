@@ -38,6 +38,7 @@ export async function login(req, res, next) {
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
     const { accessToken, refreshToken } = await loginUser(user, password);
+    await revokeAllRefreshTokens(user.id);
     await storeRefreshToken(user.id, refreshToken);
 
     const refreshMaxAgeMs = getTokenMaxAgeMs(refreshToken);
