@@ -4,7 +4,7 @@ const allowedOrigins = [
   "http://localhost:5173",   // Vite
   "http://localhost:3000",   // React
   "http://localhost:4173",   // Preview
-  "https://pos-system-six-jade.vercel.app",   // Preview
+  "https://pos-system-six-jade.vercel.app/",   // Preview
 ];
 
 export const corsConfig = cors({

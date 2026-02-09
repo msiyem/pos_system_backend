@@ -11,6 +11,10 @@ import { userLimiter } from "./middleware/rateLimiter.js";
 const app = express();
 dotenv.config();
 
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 // ===== Global Middlewares =====
 app.use(corsConfig);
 app.use(express.json());

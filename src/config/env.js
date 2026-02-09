@@ -18,9 +18,13 @@ requiredEnvs.forEach((key) => {
   }
 });
 
+const nodeEnv = process.env.NODE_ENV || "development";
+const cookieSecureEnv = process.env.COOKIE_SECURE;
+const cookieSameSiteEnv = process.env.COOKIE_SAME_SITE;
+
 export const env = {
   port: Number(process.env.PORT),
-  nodeEnv: process.env.NODE_ENV || "development",
+  nodeEnv,
 
   db: {
     host: process.env.DB_HOST,
@@ -44,8 +48,11 @@ export const env = {
   },
 
   cookie: {
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+    secure:
+      cookieSecureEnv !== undefined
+        ? cookieSecureEnv === "true"
+        : nodeEnv === "production",
+    sameSite: cookieSameSiteEnv || (nodeEnv === "production" ? "none" : "lax"),
   },
 
   logLevel: process.env.LOG_LEVEL || "info",
