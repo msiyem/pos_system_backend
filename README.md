@@ -132,15 +132,6 @@ npm start
 
 Health check: `GET /health`
 
-## Default Admin
-
-On startup, the app seeds a default admin if none exists:
-
-- Username: `superadmin`
-- Email: `admin@gmail.com`
-- Password: `admin123`
-
-Change these credentials in production.
 
 ## Database Schema
 
