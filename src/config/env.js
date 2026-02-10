@@ -56,4 +56,14 @@ export const env = {
   },
 
   logLevel: process.env.LOG_LEVEL || "info",
+  bootstrap: {
+    enabled: process.env.BOOTSTRAP_ADMIN_ENABLE === "true",
+    name: process.env.BOOTSTRAP_ADMIN_NAME,
+    username: process.env.BOOTSTRAP_ADMIN_USERNAME,
+    email: process.env.BOOTSTRAP_ADMIN_EMAIL,
+    password: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+    once: process.env.BOOTSTRAP_ADMIN_ONCE !== "false",
+    onceFile:
+      process.env.BOOTSTRAP_ADMIN_ONCE_FILE || "logs/bootstrap-admin.done",
+  },
 };

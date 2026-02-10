@@ -19,12 +19,6 @@ if (process.env.NODE_ENV === "production") {
 app.use(corsConfig);
 app.use(express.json());
 app.use(cookieParser());
-app.use((req, res, next) => {
-  console.log("METHOD:", req.method);
-  console.log("URL:", req.originalUrl);
-  console.log("BODY (before multer):", req.body);
-  next();
-});
 
 // ===== Public Routes =====
 app.use("/api/auth", routes.auth);
