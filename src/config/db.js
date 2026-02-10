@@ -12,19 +12,18 @@ const ssl = env.db.sslCa
 const pool = mysql.createPool({
   host: env.db.host,
   port: env.db.port,
-  user: env.db.user,
+  user: env.db.user,        
   password: env.db.password,
   database: env.db.name,
+
   ...(ssl ? { ssl } : {}),
+
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 5,       
   queueLimit: 0,
   connectTimeout: 20000,
 });
 
-pool.getConnection()
-  .then(() => console.log("✅ DB connected"))
-  .catch(err => console.error("❌ DB error:", err.message));
 
 
 export default pool;

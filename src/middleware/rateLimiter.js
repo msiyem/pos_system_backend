@@ -9,14 +9,13 @@ export const loginLimiter = rateLimit({
 });
 
 export const userLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 min
+  windowMs: 1 * 60 * 1000, 
   max: 70,
 
-  // ✅ IPv6-safe key generator
   keyGenerator: (req) => {
     if (req.user?.id) {
-      return `user-${req.user.id}`; // user-based limit
+      return `user-${req.user.id}`; 
     }
-    return ipKeyGenerator(req); // IP-based fallback (SAFE)
+    return ipKeyGenerator(req); 
   },
 });
